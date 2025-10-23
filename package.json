@@ -44,6 +44,14 @@
   ],
   "author": "MarkDrei",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MarkDrei/IronGuard.git"
+  },
+  "bugs": {
+    "url": "https://github.com/MarkDrei/IronGuard/issues"
+  },
+  "homepage": "https://github.com/MarkDrei/IronGuard#readme",
   "engines": {
     "node": ">=16.0.0"
   },
