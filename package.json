@@ -1,0 +1,63 @@
+{
+  "name": "@markdrei/ironguard-typescript-locks",
+  "version": "0.1.0",
+  "description": "IronGuard: Unbreakable TypeScript lock system with compile-time deadlock prevention and runtime mutual exclusion",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "build:clean": "rm -rf dist && npm run build",
+    "build:dev": "tsc",
+    "build:tests": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist",
+    "examples": "npm run build && node dist/src/examples/index.js",
+    "examples:flexible": "npm run build && node dist/src/examples/flexibleLock3Test.js",
+    "examples:violations": "npm run build && node dist/src/examples/compileTimeViolations.js",
+    "examples:mutex": "npm run build && node dist/src/examples/mutualExclusionDemo.js",
+    "examples:rollback": "npm run build && node dist/src/examples/rollbackDemo.js",
+    "examples:combinations": "npm run build && node dist/src/examples/featureCombinationsDemo.js",
+    "examples:readwrite": "npm run build && node dist/src/examples/readWriteExamples.js",
+    "examples:context": "npm run build && node dist/src/examples/contextTransferDemo.js",
+    "examples:composable": "npm run build && node dist/src/examples/composableTypesDemo.js",
+    "test": "npm run build:tests && node --test dist/tests/*.node.test.js",
+    "test:compile": "npm run build:tests && node scripts/test-compile-time.js",
+    "test:all": "npm run test && npm run test:compile",
+    "lint": "eslint src/core/**/*.ts",
+    "lint:fix": "eslint src/core/**/*.ts --fix",
+    "prepublishOnly": "npm run test:all && npm run lint && npm run build:clean"
+  },
+  "keywords": [
+    "typescript",
+    "locks",
+    "concurrency", 
+    "deadlock-prevention",
+    "mutex",
+    "lock-order",
+    "compile-time",
+    "type-checking"
+  ],
+  "author": "MarkDrei",
+  "license": "MIT",
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "peerDependencies": {
+    "typescript": ">=4.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.21",
+    "@typescript-eslint/eslint-plugin": "^5.62.0",
+    "@typescript-eslint/parser": "^5.62.0",
+    "eslint": "^8.57.1",
+    "eslint-config-prettier": "^10.1.8",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.0.0",
+    "vitest": "^3.2.4"
+  }
+}

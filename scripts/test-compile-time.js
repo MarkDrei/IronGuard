@@ -1,0 +1,587 @@
+#!/usr/bin/env node
+
+/**
+ * IronGuard Compile-time Validation Script
+ * 
+ * This script tests that invalid code patterns are correctly rejected at compile-time.
+ * It creates temporary test files and attempts to compile them, verifying:
+ * 
+ * 1. Invalid code patterns fail compilation (negative tests)
+ * 2. Valid code patterns compile successfully (positive tests - "test the test")
+ * 
+ * The positive tests ensure our compilation setup is working correctly.
+ * If they fail, it indicates an issue with our testing infrastructure.
+ */
+
+const fs = require('fs');
+const path = require('path');
+const { execSync } = require('child_process');
+
+// Test cases - code that should fail compilation
+const invalidCodeTests = [
+  {
+    name: 'Lock ordering violation: LOCK_3 → LOCK_1',
+    code: `
+import { createLockContext, LOCK_1, LOCK_3 } from 'src/core';
+async function test() {
+  const ctx3 = await createLockContext().acquireWrite(LOCK_3);
+  const invalid = await ctx3.acquireWrite(LOCK_1); // Should fail: 3 → 1
+}
+`
+  },
+  {
+    name: 'Lock ordering violation: LOCK_4 → LOCK_2',
+    code: `
+import { createLockContext, LOCK_2, LOCK_4 } from 'src/core';
+async function test() {
+  const ctx4 = await createLockContext().acquireWrite(LOCK_4);
+  const invalid = await ctx4.acquireWrite(LOCK_2); // Should fail: 4 → 2
+}
+`
+  },
+  {
+    name: 'Lock ordering violation: LOCK_5 → LOCK_3',
+    code: `
+import { createLockContext, LOCK_3, LOCK_5 } from 'src/core';
+async function test() {
+  const ctx5 = await createLockContext().acquireWrite(LOCK_5);
+  const invalid = await ctx5.acquireWrite(LOCK_3); // Should fail: 5 → 3
+}
+`
+  },
+  {
+    name: 'Duplicate lock acquisition: LOCK_1',
+    code: `
+import { createLockContext, LOCK_1 } from 'src/core';
+async function test() {
+  const ctx1 = await createLockContext().acquireWrite(LOCK_1);
+  const duplicate = await ctx1.acquireWrite(LOCK_1); // Should fail: duplicate
+}
+`
+  },
+  {
+    name: 'Duplicate lock acquisition: LOCK_3',
+    code: `
+import { createLockContext, LOCK_3 } from 'src/core';
+async function test() {
+  const ctx3 = await createLockContext().acquireWrite(LOCK_3);
+  const duplicate = await ctx3.acquireWrite(LOCK_3); // Should fail: duplicate
+}
+`
+  },
+  {
+    name: 'Using non-held lock: LOCK_2 from LOCK_1 context',
+    code: `
+import { createLockContext, LOCK_1, LOCK_2 } from 'src/core';
+async function test() {
+  const ctx1 = await createLockContext().acquireWrite(LOCK_1);
+  ctx1.useLock(LOCK_2, () => {}); // Should fail: don't have LOCK_2
+}
+`
+  },
+  {
+    name: 'Using lock from empty context',
+    code: `
+import { createLockContext, LOCK_1 } from 'src/core';
+async function test() {
+  const empty = createLockContext();
+  empty.useLock(LOCK_1, () => {}); // Should fail: no locks held
+}
+`
+  },
+  {
+    name: 'Invalid ValidLock3Context: LOCK_4',
+    code: `
+import { createLockContext, LOCK_4 } from 'src/core';
+import type { ValidLock3Context, LockLevel } from 'src/core';
+function needsLock3<T extends readonly LockLevel[]>(ctx: ValidLock3Context<T>) { return ctx; }
+async function test() {
+  const ctx4 = await createLockContext().acquireWrite(LOCK_4);
+  needsLock3(ctx4); // Should fail: LOCK_4 cannot acquire LOCK_3
+}
+`
+  },
+  {
+    name: 'Invalid ValidLock3Context: LOCK_5',
+    code: `
+import { createLockContext, LOCK_5 } from 'src/core';
+import type { ValidLock3Context, LockLevel } from 'src/core';
+function needsLock3<T extends readonly LockLevel[]>(ctx: ValidLock3Context<T>) { return ctx; }
+async function test() {
+  const ctx5 = await createLockContext().acquireWrite(LOCK_5);
+  needsLock3(ctx5); // Should fail: LOCK_5 cannot acquire LOCK_3
+}
+`
+  },
+  {
+    name: 'Invalid ValidLock3Context: LOCK_4 + LOCK_5',
+    code: `
+import { createLockContext, LOCK_4, LOCK_5 } from 'src/core';
+import type { ValidLock3Context, LockLevel } from 'src/core';
+function needsLock3<T extends readonly LockLevel[]>(ctx: ValidLock3Context<T>) { return ctx; }
+async function test() {
+  const ctx45 = await createLockContext().acquireWrite(LOCK_4).then(c => c.acquireWrite(LOCK_5));
+  needsLock3(ctx45); // Should fail: LOCK_4,LOCK_5 cannot acquire LOCK_3
+}
+`
+  },
+  {
+    name: 'Invalid ValidLock3Context: context with LOCK_4 but no LOCK_3',
+    code: `
+import { createLockContext, LOCK_4 } from '../src/core';
+import type { ValidLock3Context, LockLevel } from '../src/core';
+function needsLock3<T extends readonly LockLevel[]>(ctx: ValidLock3Context<T>) { return ctx; }
+async function test() {
+  const ctx4 = await createLockContext().acquireWrite(LOCK_4);
+  needsLock3(ctx4); // Should fail: has LOCK_4 without LOCK_3
+}
+`
+  },
+  {
+    name: 'Function requires LOCK_2 but only has LOCK_1',
+    code: `
+import { createLockContext, LOCK_1 } from 'src/core';
+import type { Contains, LockContext, LockLevel } from 'src/core';
+function requiresLock2<THeld extends readonly LockLevel[]>(
+  context: Contains<THeld, 2> extends true ? LockContext<THeld> : never
+): string { return 'ok'; }
+async function test() {
+  const ctx1 = await createLockContext().acquireWrite(LOCK_1);
+  requiresLock2(ctx1); // Should fail: missing LOCK_2
+}
+`
+  },
+  {
+    name: 'Complex ordering violation: LOCK_2,LOCK_3 → LOCK_1',
+    code: `
+import { createLockContext, LOCK_1, LOCK_2, LOCK_3 } from 'src/core';
+async function test() {
+  const ctx23 = await createLockContext().acquireWrite(LOCK_2).then(c => c.acquireWrite(LOCK_3));
+  const invalid = await ctx23.acquireWrite(LOCK_1); // Should fail: 2,3 → 1
+}
+`
+  },
+  {
+    name: 'High lock ordering violation: LOCK_12 → LOCK_8',
+    code: `
+import { createLockContext, LOCK_8, LOCK_12 } from 'src/core';
+async function test() {
+  const ctx12 = await createLockContext().acquireWrite(LOCK_12);
+  const invalid = await ctx12.acquireWrite(LOCK_8); // Should fail: 12 → 8
+}
+`
+  },
+  // ❌ Rollback to non-held lock
+  {
+    name: 'Rollback to non-held lock: LOCK_2',
+    code: `
+import { createLockContext, LOCK_1, LOCK_2, LOCK_3 } from 'src/core';
+async function test() {
+  const ctx13 = await createLockContext().acquireWrite(LOCK_1).then(c => c.acquireWrite(LOCK_3));
+  const invalid = ctx13.rollbackTo(LOCK_2); // Should fail: LOCK_2 not held
+}
+`
+  },
+  {
+    name: 'Rollback to higher lock: LOCK_5',
+    code: `
+import { createLockContext, LOCK_1, LOCK_3, LOCK_5 } from 'src/core';
+async function test() {
+  const ctx13 = await createLockContext().acquireWrite(LOCK_1).then(c => c.acquireWrite(LOCK_3));
+  const invalid = ctx13.rollbackTo(LOCK_5); // Should fail: LOCK_5 not held
+}
+`
+  },
+  {
+    name: 'Rollback on empty context',
+    code: `
+import { createLockContext, LOCK_1 } from 'src/core';
+async function test() {
+  const empty = createLockContext();
+  const invalid = empty.rollbackTo(LOCK_1); // Should fail: no locks held
+}
+`
+  },
+  {
+    name: 'Rollback to skipped lock',
+    code: `
+import { createLockContext, LOCK_1, LOCK_2, LOCK_5 } from 'src/core';
+async function test() {
+  const ctx15 = await createLockContext().acquireWrite(LOCK_1).then(c => c.acquireWrite(LOCK_5));
+  const invalid = ctx15.rollbackTo(LOCK_2); // Should fail: LOCK_2 skipped, not held
+}
+`
+  },
+  {
+    name: 'High lock ordering violation: LOCK_15 → LOCK_6',
+    code: `
+import { createLockContext, LOCK_6, LOCK_15 } from 'src/core';
+async function test() {
+  const ctx15 = await createLockContext().acquireWrite(LOCK_15);
+  const invalid = await ctx15.acquireWrite(LOCK_6); // Should fail: 15 → 6
+}
+`
+  },
+  {
+    name: 'Duplicate high lock acquisition: LOCK_10',
+    code: `
+import { createLockContext, LOCK_10 } from 'src/core';
+async function test() {
+  const ctx10 = await createLockContext().acquireWrite(LOCK_10);
+  const invalid = await ctx10.acquireWrite(LOCK_10); // Should fail: duplicate
+}
+`
+  },
+  {
+    name: 'High lock mixed ordering violation: LOCK_9 → LOCK_4',
+    code: `
+import { createLockContext, LOCK_4, LOCK_9 } from 'src/core';
+async function test() {
+  const ctx9 = await createLockContext().acquireWrite(LOCK_9);
+  const invalid = await ctx9.acquireWrite(LOCK_4); // Should fail: 9 → 4
+}
+`
+  }
+];
+
+// Test cases - code that should compile successfully (to verify our test mechanism)
+// These tests ensure our compilation setup is working correctly - if these fail,
+// it indicates a problem with our testing infrastructure rather than the IronGuard system
+const validCodeTests = [
+  {
+    name: 'Sanity check: Basic TypeScript compilation',
+    code: `
+// Simple valid TypeScript code to verify our compilation mechanism works
+const message: string = "Hello, IronGuard!";
+const numbers: number[] = [1, 2, 3, 4, 5];
+
+interface TestInterface {
+  id: number;
+  name: string;
+}
+
+function processData(data: TestInterface): string {
+  return \`Processing: \${data.name} (ID: \${data.id})\`;
+}
+
+const testData: TestInterface = { id: 1, name: "Test" };
+const result = processData(testData);
+
+// If this doesn't compile, our test infrastructure has issues
+export { message, numbers, processData };
+`
+  },
+  {
+    name: 'Valid lock ordering: Sequential acquisition',
+    code: `
+import { createLockContext, LOCK_1, LOCK_2, LOCK_3, LOCK_4, LOCK_5 } from 'src/core';
+async function test() {
+  // Valid sequential lock acquisition
+  const ctx = createLockContext();
+  const ctx1 = await ctx.acquireWrite(LOCK_1);
+  const ctx12 = await ctx1.acquireWrite(LOCK_2);
+  const ctx123 = await ctx12.acquireWrite(LOCK_3);
+  const ctx1234 = await ctx123.acquireWrite(LOCK_4);
+  const ctx12345 = await ctx1234.acquireWrite(LOCK_5);
+  
+  // Clean up
+  ctx12345.dispose();
+}
+`
+  },
+  {
+    name: 'Valid lock skipping patterns',
+    code: `
+import { createLockContext, LOCK_1, LOCK_3, LOCK_5 } from 'src/core';
+async function test() {
+  // Valid lock skipping: 1 → 3
+  const ctx1 = await createLockContext().acquireWrite(LOCK_1);
+  const ctx13 = await ctx1.acquireWrite(LOCK_3);
+  ctx13.dispose();
+  
+  // Valid lock skipping: 1 → 5
+  const ctx1b = await createLockContext().acquireWrite(LOCK_1);
+  const ctx15 = await ctx1b.acquireWrite(LOCK_5);
+  ctx15.dispose();
+  
+  // Valid direct acquisition
+  const ctx5 = await createLockContext().acquireWrite(LOCK_5);
+  ctx5.dispose();
+}
+`
+  },
+  {
+    name: 'Valid lock usage patterns',
+    code: `
+import { createLockContext, LOCK_1, LOCK_2, LOCK_3 } from 'src/core';
+async function test() {
+  const ctx123 = await createLockContext()
+    .acquireWrite(LOCK_1)
+    .then(c => c.acquireWrite(LOCK_2))
+    .then(c => c.acquireWrite(LOCK_3));
+  
+  // Using held locks is valid
+  ctx123.useLock(LOCK_1, () => console.log('Using LOCK_1'));
+  ctx123.useLock(LOCK_2, () => console.log('Using LOCK_2'));
+  ctx123.useLock(LOCK_3, () => console.log('Using LOCK_3'));
+  
+  // Check lock state
+  const hasLock1 = ctx123.hasLock(LOCK_1);
+  const hasLock2 = ctx123.hasLock(LOCK_2);
+  const hasLock3 = ctx123.hasLock(LOCK_3);
+  
+  ctx123.dispose();
+}
+`
+  },
+  {
+    name: 'Valid ValidLock3Context usage',
+    code: `
+import { createLockContext, LOCK_1, LOCK_2, LOCK_3 } from 'src/core';
+import type { ValidLock3Context, LockLevel } from 'src/core';
+
+function needsLock3<T extends readonly LockLevel[]>(ctx: ValidLock3Context<T>) { 
+  return ctx; 
+}
+
+async function test() {
+  // Empty context can acquire LOCK_3
+  const empty = createLockContext();
+  needsLock3(empty);
+  
+  // Context with LOCK_1 can acquire LOCK_3
+  const ctx1 = await createLockContext().acquireWrite(LOCK_1);
+  needsLock3(ctx1);
+  ctx1.dispose();
+  
+  // Context with LOCK_2 can acquire LOCK_3
+  const ctx2 = await createLockContext().acquireWrite(LOCK_2);
+  needsLock3(ctx2);
+  ctx2.dispose();
+  
+  // Context with LOCK_3 already has it
+  const ctx3 = await createLockContext().acquireWrite(LOCK_3);
+  needsLock3(ctx3);
+  ctx3.dispose();
+}
+`
+  },
+  {
+    name: 'Valid function constraints',
+    code: `
+import { createLockContext, LOCK_1, LOCK_2, LOCK_3, LOCK_4 } from 'src/core';
+import type { Contains, LockContext, LockLevel } from 'src/core';
+
+function requiresLock2<THeld extends readonly LockLevel[]>(
+  context: Contains<THeld, 2> extends true ? LockContext<THeld> : never
+): string { return 'has lock 2'; }
+
+function requiresLock1<THeld extends readonly LockLevel[]>(
+  context: Contains<THeld, 1> extends true ? LockContext<THeld> : never
+): string { return 'has lock 1'; }
+
+async function test() {
+  // Context with LOCK_2 satisfies requiresLock2
+  const ctx2 = await createLockContext().acquireWrite(LOCK_2);
+  const result2 = requiresLock2(ctx2);
+  ctx2.dispose();
+  
+  // Context with LOCK_1 and LOCK_2 satisfies both
+  const ctx12 = await createLockContext().acquireWrite(LOCK_1).then(c => c.acquireWrite(LOCK_2));
+  const result1 = requiresLock1(ctx12);
+  const result2b = requiresLock2(ctx12);
+  ctx12.dispose();
+  
+  // Context with multiple locks satisfies individual requirements
+  const ctx1234 = await createLockContext()
+    .acquireWrite(LOCK_1)
+    .then(c => c.acquireWrite(LOCK_2))
+    .then(c => c.acquireWrite(LOCK_3))
+    .then(c => c.acquireWrite(LOCK_4));
+  const result1b = requiresLock1(ctx1234);
+  const result2c = requiresLock2(ctx1234);
+  ctx1234.dispose();
+}
+`
+  },
+  {
+    name: 'Valid complex lock patterns',
+    code: `
+import { createLockContext, LOCK_1, LOCK_2, LOCK_4, LOCK_5 } from 'src/core';
+async function test() {
+  // Valid complex patterns
+  const ctx14 = await createLockContext().acquireWrite(LOCK_1).then(c => c.acquireWrite(LOCK_4));
+  ctx14.dispose();
+  
+  const ctx25 = await createLockContext().acquireWrite(LOCK_2).then(c => c.acquireWrite(LOCK_5));
+  ctx25.dispose();
+  
+  const ctx145 = await createLockContext()
+    .acquireWrite(LOCK_1)
+    .then(c => c.acquireWrite(LOCK_4))
+    .then(c => c.acquireWrite(LOCK_5));
+  ctx145.dispose();
+  
+  // Direct high-level acquisition
+  const ctx4 = await createLockContext().acquireWrite(LOCK_4);
+  const ctx45 = await ctx4.acquireWrite(LOCK_5);
+  ctx45.dispose();
+}
+`
+  },
+  {
+    name: 'Valid type system interaction',
+    code: `
+import { createLockContext, LOCK_1, LOCK_3, LOCK_5 } from 'src/core';
+import type { LockContext, LockLevel, Contains, CanAcquire } from 'src/core';
+
+async function test() {
+  // Type system should work correctly for valid cases
+  const ctx1 = await createLockContext().acquireWrite(LOCK_1);
+  
+  // These type checks should all pass
+  const canAcquire3: CanAcquire<[1], 3> = true as const;
+  const canAcquire5: CanAcquire<[1], 5> = true as const;
+  const hasLock1: Contains<[1], 1> = true as const;
+  
+  // Valid acquisitions based on type system
+  const ctx13 = await ctx1.acquireWrite(LOCK_3);
+  ctx13.dispose();
+  
+  const ctx1b = await createLockContext().acquireWrite(LOCK_1);
+  const ctx15 = await ctx1b.acquireWrite(LOCK_5);
+  ctx15.dispose();
+}
+`
+  },
+  {
+    name: 'Valid high lock operations',
+    code: `
+import { createLockContext, LOCK_6, LOCK_9, LOCK_12, LOCK_15 } from 'src/core';
+
+async function test() {
+  // Direct high lock acquisition
+  const ctx9 = await createLockContext().acquireWrite(LOCK_9);
+  ctx9.dispose();
+  
+  // High lock progression
+  const ctx6 = await createLockContext().acquireWrite(LOCK_6);
+  const ctx612 = await ctx6.acquireWrite(LOCK_12);
+  const ctx61215 = await ctx612.acquireWrite(LOCK_15);
+  ctx61215.dispose();
+}
+`
+  },
+  {
+    name: 'Valid high lock skipping patterns',
+    code: `
+import { createLockContext, LOCK_2, LOCK_8, LOCK_13 } from 'src/core';
+
+async function test() {
+  // Large skip: 2 → 13
+  const ctx2 = await createLockContext().acquireWrite(LOCK_2);
+  const ctx213 = await ctx2.acquireWrite(LOCK_13);
+  ctx213.dispose();
+  
+  // Medium skip: 8 direct
+  const ctx8 = await createLockContext().acquireWrite(LOCK_8);
+  ctx8.dispose();
+}
+`
+  }
+];
+
+function runTest(testCase, shouldFail = true) {
+  const tempDir = path.join(__dirname, 'temp-compile-tests');
+  const tempFile = path.join(tempDir, `test-${Date.now()}-${Math.random().toString(36).substr(2, 9)}.ts`);
+  
+  try {
+    // Create temp directory
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+    
+    // Write test file
+    fs.writeFileSync(tempFile, testCase.code);
+    
+    // Try to compile
+    try {
+      execSync(`npx tsc --target ES2020 --module ESNext --moduleResolution node --strict --noEmit --skipLibCheck --esModuleInterop --allowSyntheticDefaultImports --resolveJsonModule --baseUrl . ${tempFile}`, { 
+        stdio: 'pipe',
+        cwd: path.join(__dirname, '..')
+      });
+      
+      // If we get here, compilation succeeded
+      if (shouldFail) {
+        console.error(`❌ FAIL: ${testCase.name}`);
+        console.error(`   Expected compilation to fail, but it succeeded`);
+        return false;
+      } else {
+        console.log(`✅ PASS: ${testCase.name}`);
+        return true;
+      }
+    } catch (error) {
+      // Compilation failed
+      if (shouldFail) {
+        console.log(`✅ PASS: ${testCase.name}`);
+        console.log(`   Correctly rejected with: ${error.message.split('\\n')[0]}`);
+        return true;
+      } else {
+        console.error(`❌ FAIL: ${testCase.name}`);
+        console.error(`   Expected compilation to succeed, but it failed: ${error.message}`);
+        return false;
+      }
+    }
+  } finally {
+    // Clean up
+    if (fs.existsSync(tempFile)) {
+      fs.unlinkSync(tempFile);
+    }
+  }
+}
+
+function main() {
+  console.log('🔍 IronGuard Compile-time Validation Tests');
+  console.log('==========================================\\n');
+  
+  let passed = 0;
+  let total = 0;
+  
+  console.log('Testing invalid code (should fail compilation):');
+  for (const testCase of invalidCodeTests) {
+    total++;
+    if (runTest(testCase, true)) {
+      passed++;
+    }
+  }
+  
+  if (validCodeTests.length > 0) {
+    console.log('\\nTesting valid code (should compile successfully):');
+    for (const testCase of validCodeTests) {
+      total++;
+      if (runTest(testCase, false)) {
+        passed++;
+      }
+    }
+  }
+  
+  // Clean up temp directory
+  const tempDir = path.join(__dirname, 'temp-compile-tests');
+  if (fs.existsSync(tempDir)) {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+  
+  console.log(`\\n📊 Results: ${passed}/${total} tests passed`);
+  
+  if (passed === total) {
+    console.log('🎉 All compile-time validation tests passed!');
+    process.exit(0);
+  } else {
+    console.log('💥 Some compile-time validation tests failed!');
+    process.exit(1);
+  }
+}
+
+if (require.main === module) {
+  main();
+}
