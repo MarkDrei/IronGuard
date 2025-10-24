@@ -5,7 +5,7 @@ TypeScript compile-time lock order violation detection system with runtime mutua
 ## Installation
 
 ```bash
-npm install @ironguard/typescript-locks
+npm install @markdrei/ironguard-typescript-locks
 ```
 
 ## Quick Start
@@ -16,7 +16,7 @@ import {
   LOCK_1, 
   LOCK_2, 
   ValidLock2Context 
-} from '@ironguard/typescript-locks';
+} from '@markdrei/ironguard-typescript-locks';
 
 // Function requires LOCK_2 to be held or acquirable - enforced at compile-time!
 async function processData<T extends readonly any[]>(
