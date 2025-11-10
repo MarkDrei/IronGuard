@@ -2,7 +2,7 @@
 
 ## Overview
 
-IronGuard now supports read/write locks with full backward compatibility. This document outlines best practices for using the enhanced system.
+IronGuard now supports read/write locks. This document outlines best practices for using the enhanced system.
 
 ## Key Features
 
