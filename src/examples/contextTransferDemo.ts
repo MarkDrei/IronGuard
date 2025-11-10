@@ -38,7 +38,10 @@ import {
   type OrderedSubsequences,
   LOCK_4,
   LOCK_5,
-  LOCK_8
+  LOCK_8,
+  LOCK_11,
+  LOCK_10,
+  LOCK_12
 } from '../core';// =============================================================================
 // BUILDING BLOCK 1: HasLock<THeld, Level>
 // Checks if a specific lock is already held in the context
@@ -205,13 +208,23 @@ async function veryFlexibleFunctionUpTo3(
  * More permissive: Accepts any ordered subsequence up to LOCK_4
  */
 type ValidLockSubsequencesUpTo4 = OrderedSubsequences<readonly [1, 2, 3, 4]>;
+type ValidLockSubsequencesUpTo10 = OrderedSubsequences<readonly [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]>;
+// type ValidLockSubsequencesUpTo15 = OrderedSubsequences<readonly [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]>;
 
 async function veryFlexibleFunctionUpTo4(
   context: LockContext<ValidLockSubsequencesUpTo4>
 ): Promise<void> {
   console.log(`   ✅ veryFlexibleFunctionUpTo4: Accepted context ${context.toString()}`);
-  context.acquireRead(LOCK_8);
+  context.acquireRead(LOCK_5);
   
+  await new Promise(resolve => setTimeout(resolve, 50));
+}
+
+async function veryFlexibleFunctionUpTo15(
+  context: LockContext<ValidLockSubsequencesUpTo10>
+): Promise<void> {
+  console.log(`   ✅ veryFlexibleFunctionUpTo15: Accepted context ${context.toString()}`);
+  context.acquireRead(LOCK_11);
   await new Promise(resolve => setTimeout(resolve, 50));
 }
 
