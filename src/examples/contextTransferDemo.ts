@@ -1,142 +1,167 @@
 #!/usr/bin/env npx tsx
 
 /**
- * IronGuard Context Transfer and Compile-Time Validation Example
+ * IronGuard Type System Building Blocks Demo
  * 
- * This example demonstrates advanced IronGuard features:
- * - Type-safe function parameters with compile-time lock validation
- * - Context transfer between functions with preserved lock state
- * - Read/write lock mode preservation through function calls
- * - Lock escalation patterns (read → write → dispose)
- * - Complex workflow orchestration with chained function calls
+ * This example demonstrates the three composable building blocks of ironGuardTypes.ts:
  * 
- * Key Features Showcased:
- * - ValidLock2Context<T> type constraint for compile-time safety
- * - Runtime lock validation with graceful error handling
- * - Mixed lock acquisition patterns (read + write combinations)
- * - Function parameter constraints that prevent invalid contexts
+ * 1. HasLock<THeld, Level> - Checks if a lock is already held in the context
+ * 2. CanAcquire<THeld, TLock> - Generic type checking if lock TLock can be acquired
+ * 3. ValidLockXContext<THeld> - Combines both checks with proper error messages
+ * 
+ * The demo shows:
+ * - How to use each building block type in function signatures
+ * - Chaining function calls with lock acquisition between steps
+ * - Clear, descriptive function names that explain lock requirements
+ * - Progressive complexity: simple checks → combinations → real workflows
+ * 
+ * Note: Using CanAcquire<T, LockNumber> uniformly eliminates casting needs!
+ * The lock parameter requires casting as: `LOCK_X as CanAcquire<T, X> extends true ? X : never`
+ * because TypeScript can't automatically prove the constraint from the context parameter.
  */
 
-import { 
-  createLockContext, 
-  LOCK_1, 
-  LOCK_2, 
-  LOCK_3, 
-  LOCK_4, 
-  LOCK_5,
+import {
+  createLockContext,
+  createFreshContextWithReadLock,
+  createFreshContextWithWriteLock,
+  LOCK_1,
+  LOCK_2,
+  LOCK_3,
   type LockContext,
-  type Contains,
-  type LockLevel
-} from '../core';
-
-// =============================================================================
-// TYPE CONSTRAINTS - Compile-time validation for function parameters
-// =============================================================================
-
-/**
- * Type constraint that only allows contexts containing LOCK_2
- * This provides compile-time safety for functions requiring specific locks
- */
-type ValidLock2Context<T> = T extends LockContext<infer Locks>
-  ? Contains<Locks, 2> extends true
-    ? T
-    : "❌ ERROR: processUserData() requires a context containing LOCK_2. Current context does not have LOCK_2."
-  : "❌ ERROR: processUserData() requires a LockContext containing LOCK_2.";
-
-// =============================================================================
-// FUNCTION DEFINITIONS - Context-aware functions with lock requirements
+  type LockLevel,
+  type HasLock,
+  type ValidLock2Context,
+  type CanAcquire
+} from '../core';// =============================================================================
+// BUILDING BLOCK 1: HasLock<THeld, Level>
+// Checks if a specific lock is already held in the context
 // =============================================================================
 
 /**
- * Processes user data - demonstrates compile-time lock validation
- * Only accepts contexts that contain LOCK_2 (enforced at compile time)
+ * Example function that requires LOCK_2 to already be held
+ * Uses HasLock<T, 2> to ensure the lock is present
  */
-async function processUserData<T extends LockContext<any>>(context: ValidLock2Context<T>): Promise<ValidLock2Context<T>> {
-  const ctx = context as unknown as T;
-  console.log(`   📊 processUserData() called with: ${ctx.toString()}`);
-  
-  const heldLocks = ctx.getHeldLocks();
-  console.log(`      Held locks: ${heldLocks.join(', ')}`);
-  
-  // Type system guarantees LOCK_2 is present, but we can verify for demonstration
-  if (ctx.hasLock(LOCK_2)) {
-    console.log(`      ✅ LOCK_2 confirmed - processing user data...`);
-    await new Promise(resolve => setTimeout(resolve, 100));
-    console.log(`      ✅ User data processed successfully`);
-  } else {
-    // This should never happen due to compile-time validation
-    console.log(`      ❌ UNEXPECTED: LOCK_2 not found despite type validation!`);
-    throw new Error('LOCK_2 required for processUserData()');
-  }
-  
-  return context;
+async function requireLock2ToBeAlreadyHeld<T extends readonly LockLevel[]>(
+  context: HasLock<T, 2> extends true ? LockContext<T> : never
+): Promise<void> {
+  console.log(`   ✅ requireLock2ToBeAlreadyHeld: LOCK_2 confirmed present`);
+  await new Promise(resolve => setTimeout(resolve, 50));
 }
 
 /**
- * Validates and saves data - requires both LOCK_1 and LOCK_3
- * Demonstrates runtime validation for multiple lock requirements
+ * Example function that requires LOCK_3 to already be held
+ * Uses HasLock<T, 3> to ensure the lock is present
  */
-async function validateAndSave(context: LockContext<any>): Promise<LockContext<any>> {
-  console.log(`   💾 validateAndSave() called with: ${context.toString()}`);
-  
-  const hasLock1 = context.hasLock(LOCK_1);
-  const hasLock3 = context.hasLock(LOCK_3);
-  
-  if (hasLock1 && hasLock3) {
-    console.log(`      ✅ Both LOCK_1 and LOCK_3 held - proceeding with validation`);
-    await new Promise(resolve => setTimeout(resolve, 50));
-    console.log(`      Data validated and saved successfully`);
-  } else {
-    console.log(`      ⚠️  Missing required locks - LOCK_1: ${hasLock1}, LOCK_3: ${hasLock3}`);
-  }
-  
-  return context;
+async function requireLock3ToBeAlreadyHeld<T extends readonly LockLevel[]>(
+  context: HasLock<T, 3> extends true ? LockContext<T> : never
+): Promise<void> {
+  console.log(`   ✅ requireLock3ToBeAlreadyHeld: LOCK_3 confirmed present`);
+  await new Promise(resolve => setTimeout(resolve, 50));
+}
+
+// =============================================================================
+// BUILDING BLOCK 2: CanAcquire<THeld, TLock>
+// Generic type that checks if lock TLock can be acquired following ordering rules
+// =============================================================================
+
+/**
+ * Example function that ensures LOCK_2 CAN be acquired
+ * Creates a fresh context with LOCK_2 and chains to LOCK_3
+ */
+async function ensureLock2CanBeAcquired<T extends readonly LockLevel[]>(
+  context: CanAcquire<T, 2> extends true ? LockContext<T> : never
+): Promise<void> {
+  console.log(`   ✅ ensureLock2CanBeAcquired: Creating fresh context with LOCK_2`);
+
+  const freshContext = await createFreshContextWithWriteLock<T, 2>(
+    context,
+    LOCK_2 as CanAcquire<T, 2> extends true ? 2 : never
+  );
+  console.log(`      Acquired: ${freshContext.toString()}`);
+
+  await ensureLock3CanBeAcquired(freshContext);
+
+  console.log(`      Releasing LOCK_2...`);
+  freshContext.dispose();
+}/**
+ * Example function that ensures LOCK_3 CAN be acquired
+ * Creates a fresh context with LOCK_3 and chains to LOCK_4
+ */
+async function ensureLock3CanBeAcquired<T extends readonly LockLevel[]>(
+  context: CanAcquire<T, 3> extends true ? LockContext<T> : never
+): Promise<void> {
+  console.log(`   ✅ ensureLock3CanBeAcquired: Creating fresh context with LOCK_3`);
+
+  const freshContext = await createFreshContextWithReadLock<T, 3>(
+    context,
+    LOCK_3 as CanAcquire<T, 3> extends true ? 3 : never
+  );
+  console.log(`      Acquired: ${freshContext.toString()}`);
+
+  await ensureLock4CanBeAcquired(freshContext);
+
+  await new Promise(resolve => setTimeout(resolve, 50));
+
+  console.log(`      Releasing LOCK_3...`);
+  freshContext.dispose();
 }
 
 /**
- * Performs audit operations - demonstrates high-level lock usage
- * Works with audit-level locks (LOCK_4, LOCK_5) when available
+ * Example function that ensures LOCK_4 CAN be acquired.
+ * Terminal function - just demonstrates lock availability
  */
-async function performAudit(context: LockContext<any>): Promise<LockContext<any>> {
-  console.log(`   🔍 performAudit() called with: ${context.toString()}`);
-  
-  const heldLocks = context.getHeldLocks();
-  const highLevelLocks = heldLocks.filter((lock: number) => lock >= 4);
-  
-  if (highLevelLocks.length > 0) {
-    console.log(`      ✅ Auditing with high-level locks: ${highLevelLocks.join(', ')}`);
-    await new Promise(resolve => setTimeout(resolve, 75));
-    console.log(`      Audit completed successfully`);
-  } else {
-    console.log(`      ⚠️  No high-level locks available for audit`);
-  }
-  
-  return context;
+async function ensureLock4CanBeAcquired<T extends readonly LockLevel[]>(
+  _context: CanAcquire<T, 4> extends true ? LockContext<T> : never
+): Promise<void> {
+  console.log(`   ✅ ensureLock4CanBeAcquired: LOCK_4 could be acquired if needed`);
+  await new Promise(resolve => setTimeout(resolve, 50));
 }
 
+// =============================================================================
+// BUILDING BLOCK 3: ValidLockXContext<THeld>
+// Combines HasLock + CanAcquireLock with helpful error messages
+// =============================================================================
+
 /**
- * Demonstrates lock escalation from read to write mode
- * Shows proper disposal and re-acquisition patterns
+ * Example function using ValidLock2Context (the most flexible option)
+ * Accepts contexts where LOCK_2 is held OR can be acquired
  */
-async function escalateWorkflow(context: LockContext<any>): Promise<void> {
-  console.log(`   🔄 escalateWorkflow() starting with: ${context.toString()}`);
+async function workWithLock2Context<T extends readonly LockLevel[]>(
+  _context: ValidLock2Context<T> extends string ? never : ValidLock2Context<T>
+): Promise<void> {
+  console.log(`   ✅ workWithLock2Context: LOCK_2 is held or can be acquired`);
+  await new Promise(resolve => setTimeout(resolve, 50));
+}
+
+// =============================================================================
+// CHAINED WORKFLOWS
+// Demonstrate manual lock acquisition with function calls at each step
+// =============================================================================
+
+/**
+ * Workflow that progressively acquires locks and calls functions
+ * Demonstrates practical usage of the type system building blocks
+ */
+async function demonstrateChainedWorkflow(): Promise<void> {
+  // Step 1: Start with LOCK_1
+  console.log(`   Creating initial context with LOCK_1...`);
+  const step1 = await createLockContext().acquireWrite(LOCK_1);
+  console.log(`   Step 1: ${step1.toString()}`);
   
-  if (context.hasLock(LOCK_2)) {
-    console.log(`      📖 Have LOCK_2, performing read operations...`);
-    await new Promise(resolve => setTimeout(resolve, 50));
-    
-    console.log(`      📖 Read context disposed`);
-    context.dispose();
-    
-    console.log(`      🔄 Escalating to write lock...`);
-    const writeCtx = await createLockContext().acquireWrite(LOCK_2);
-    console.log(`      ✏️  Write context acquired: ${writeCtx.toString()}`);
-    
-    await new Promise(resolve => setTimeout(resolve, 50));
-    console.log(`      ✏️  Write operations completed`);
-    console.log(`      ✏️  Write context disposed`);
-    writeCtx.dispose();
-  }
+  // Step 2: Acquire LOCK_2, call function requiring it
+  console.log(`   Acquiring LOCK_2...`);
+  const step2 = await step1.acquireWrite(LOCK_2);
+  console.log(`   Step 2: ${step2.toString()}`);
+  await requireLock2ToBeAlreadyHeld(step2);
+  
+  // Step 3: Acquire LOCK_3, call function requiring it
+  console.log(`   Acquiring LOCK_3...`);
+  const step3 = await step2.acquireRead(LOCK_3);
+  console.log(`   Step 3: ${step3.toString()}`);
+  await requireLock3ToBeAlreadyHeld(step3);
+  
+  console.log(`   ✅ Chained workflow complete - disposing context`);
+  step3.dispose();
 }
 
 // =============================================================================
@@ -144,103 +169,168 @@ async function escalateWorkflow(context: LockContext<any>): Promise<void> {
 // =============================================================================
 
 /**
- * Main demonstration function showcasing all context transfer patterns
+ * Main demonstration function showcasing the type system building blocks
  */
 export async function runContextTransferDemo(): Promise<void> {
-  console.log('🔒 IronGuard Context Transfer & Compile-Time Validation Demo');
-  console.log('============================================================\n');
+  console.log('🔒 IronGuard Type System Building Blocks Demo');
+  console.log('==============================================\n');
 
-  // Scenario 1: Basic context transfer with type safety
-  console.log('1️⃣ BASIC CONTEXT TRANSFER');
-  console.log('Type-safe function calls with compile-time validation\n');
+  // =============================================================================
+  // PART 1: HasLock<THeld, Level> - Checking if lock is already held
+  // =============================================================================
   
-  const basicCtx = await createLockContext().acquireRead(LOCK_2);
-  console.log(`   Created context: ${basicCtx.toString()}`);
-  await processUserData(basicCtx);
-  basicCtx.dispose();
-  console.log(`   ✅ Context successfully passed and returned\n`);
+  console.log('📌 PART 1: HasLock<THeld, Level>');
+  console.log('Ensures a specific lock is already held in the context\n');
+  
+  console.log('Example 1a: Context with LOCK_2 → requireLock2ToBeAlreadyHeld()');
+  const ctx2 = await createLockContext().acquireWrite(LOCK_2);
+  await requireLock2ToBeAlreadyHeld(ctx2);
+  ctx2.dispose();
+  console.log('');
+  
+  console.log('Example 1b: Context with LOCK_1 + LOCK_3 → requireLock3ToBeAlreadyHeld()');
+  const ctx13 = await createLockContext().acquireRead(LOCK_1);
+  const ctx13b = await ctx13.acquireWrite(LOCK_3);
+  await requireLock3ToBeAlreadyHeld(ctx13b);
+  ctx13b.dispose();
+  console.log('');
+  
+  // =============================================================================
+  // PART 2: CanAcquireLockX<THeld> - Checking if lock can be acquired
+  // =============================================================================
+  
+  console.log('📌 PART 2: CanAcquire<THeld, TLock>');
+  console.log('Generic validation for lock ordering rules (lock might not be held yet)\n');
+  
+  console.log('Example 2a: Empty context → ensureLock2CanBeAcquired()');
+  const emptyCtx = createLockContext();
+  await ensureLock2CanBeAcquired(emptyCtx);
+  emptyCtx.dispose();
+  console.log('');
+  
+  console.log('Example 2b: Context with LOCK_1 → ensureLock2CanBeAcquired()');
+  const ctx1 = await createLockContext().acquireWrite(LOCK_1);
+  await ensureLock2CanBeAcquired(ctx1);
+  ctx1.dispose();
+  console.log('');
+  
+  console.log('Example 2c: Context with LOCK_2 → ensureLock3CanBeAcquired()');
+  const ctx2forStep3 = await createLockContext().acquireRead(LOCK_2);
+  await ensureLock3CanBeAcquired(ctx2forStep3);
+  ctx2forStep3.dispose();
+  console.log('');
+  
+  // =============================================================================
+  // PART 3: ValidLockXContext<THeld> - Combining HasLock + CanAcquire
+  // =============================================================================
+  
+  console.log('📌 PART 3: ValidLock2Context<THeld> and ValidLock3Context<THeld>');
+  console.log('Most flexible: accepts contexts where lock is held OR can be acquired\n');
+  
+  console.log('Example 3a: Empty context → workWithLock2Context()');
+  const empty2 = createLockContext();
+  await workWithLock2Context(empty2);
+  empty2.dispose();
+  console.log('');
+  
+  console.log('Example 3b: Context with LOCK_1 → workWithLock2Context()');
+  const ctx1b = await createLockContext().acquireWrite(LOCK_1);
+  await workWithLock2Context(ctx1b);
+  ctx1b.dispose();
+  console.log('');
+  
+  console.log('Example 3c: Context with LOCK_2 (already held) → workWithLock2Context()');
+  const ctx2b = await createLockContext().acquireRead(LOCK_2);
+  await workWithLock2Context(ctx2b);
+  ctx2b.dispose();
+  console.log('');
+  
+  // =============================================================================
+  // PART 4: CHAINED WORKFLOW - Progressive lock acquisition
+  // =============================================================================
+  
+  console.log('📌 PART 4: CHAINED WORKFLOW');
+  console.log('Demonstrating progressive lock acquisition with function calls\n');
+  
+  await demonstrateChainedWorkflow();
+  console.log('');
 
-  // Scenario 2: Multiple lock requirements
-  console.log('2️⃣ MULTIPLE LOCK REQUIREMENTS');
-  console.log('Functions can require specific combinations of locks\n');
+  // =============================================================================
+  // SUMMARY
+  // =============================================================================
   
-  const multiCtx = await createLockContext().acquireRead(LOCK_1);
-  const multiCtx2 = await multiCtx.acquireWrite(LOCK_3);
-  console.log(`   Created multi-lock context: ${multiCtx2.toString()}`);
-  await validateAndSave(multiCtx2);
-  multiCtx2.dispose();
-  console.log(`   ✅ Multi-lock validation completed\n`);
-
-  // Scenario 3: Missing lock handling
-  console.log('3️⃣ CONTEXT TRANSFER WITH MISSING LOCKS');
-  console.log('Functions handle missing lock requirements gracefully\n');
-  
-  const incompleteCtx = await createLockContext().acquireRead(LOCK_1);
-  console.log(`   Created incomplete context: ${incompleteCtx.toString()}`);
-  await validateAndSave(incompleteCtx);
-  incompleteCtx.dispose();
-  console.log(`   ✅ Graceful handling of missing locks\n`);
-
-  // Scenario 4: Lock escalation pattern
-  console.log('4️⃣ LOCK ESCALATION PATTERN');
-  console.log('Read lock → dispose → write lock workflow\n');
-  
-  const readCtx = await createLockContext().acquireRead(LOCK_2);
-  console.log(`   Created read context: ${readCtx.toString()}`);
-  await escalateWorkflow(readCtx);
-  console.log(`   ✅ Lock escalation workflow completed\n`);
-
-  // Scenario 5: High-level lock operations
-  console.log('5️⃣ HIGH-LEVEL LOCK OPERATIONS');
-  console.log('Functions working with audit-level locks\n');
-  
-  const auditCtx = await createLockContext().acquireRead(LOCK_2);
-  const auditCtx2 = await auditCtx.acquireWrite(LOCK_4);
-  const auditCtx3 = await auditCtx2.acquireRead(LOCK_5);
-  console.log(`   Created audit context: ${auditCtx3.toString()}`);
-  await performAudit(auditCtx3);
-  auditCtx3.dispose();
-  console.log(`   ✅ High-level lock operations completed\n`);
-
-  // Scenario 6: Complex workflow orchestration
-  console.log('6️⃣ COMPLEX WORKFLOW DEMONSTRATION');
-  console.log('Chaining multiple functions with context transfer\n');
-  
-  let workflowCtx: any = await createLockContext().acquireRead(LOCK_1);
-  console.log(`   Step 1: ${workflowCtx.toString()}`);
-  
-  workflowCtx = await workflowCtx.acquireWrite(LOCK_2);
-  console.log(`   Step 2: ${workflowCtx.toString()}`);
-  
-  workflowCtx = await workflowCtx.acquireRead(LOCK_3);
-  console.log(`   Step 3: ${workflowCtx.toString()}`);
-  
-  // Chain function calls with context passing
-  workflowCtx = await processUserData(workflowCtx);
-  workflowCtx = await validateAndSave(workflowCtx);
-  workflowCtx = await performAudit(workflowCtx);
-  
-  workflowCtx.dispose();
-  console.log(`   ✅ Complex workflow with context transfer completed\n`);
-
-  // Summary
-  console.log('🎉 CONTEXT TRANSFER BENEFITS DEMONSTRATED:');
-  console.log('   ✓ Type-safe function parameters with compile-time validation');
-  console.log('   ✓ Runtime lock availability checking with graceful handling');
-  console.log('   ✓ Lock escalation patterns (read → write → dispose)');
-  console.log('   ✓ Complex workflow orchestration with chained calls');
-  console.log('   ✓ Mixed read/write modes preserved through function calls');
-  console.log('   ✓ Compile-time prevention of invalid context passing');
-  
-  console.log('\n💡 COMPILE-TIME VALIDATION EXAMPLES:');
-  console.log('   // ❌ These would fail TypeScript compilation:');
-  console.log('   // const ctx1 = await createLockContext().acquireWrite(LOCK_1);');
-  console.log('   // await processUserData(ctx1); // ERROR: requires LOCK_2');
-  console.log('   //');
-  console.log('   // ✅ These work correctly:');
-  console.log('   // const ctx2 = await createLockContext().acquireWrite(LOCK_2);');
-  console.log('   // await processUserData(ctx2); // OK: LOCK_2 present');
+  console.log('🎉 TYPE SYSTEM BUILDING BLOCKS SUMMARY:');
+  console.log('');
+  console.log('1. HasLock<THeld, Level>');
+  console.log('   → Strictest: Lock MUST already be held');
+  console.log('   → Use when: Function needs guaranteed access to locked resource');
+  console.log('');
+  console.log('2. CanAcquire<THeld, TLock>');
+  console.log('   → Generic: Checks if lock TLock can be acquired (but not necessarily held)');
+  console.log('   → Use when: Working with createFreshContextWithReadLock/WriteLock');
+  console.log('   → No casting needed when used uniformly!');
+  console.log('');
+  console.log('3. ValidLockXContext<THeld>');
+  console.log('   → Most flexible: Combines HasLock + CanAcquire');
+  console.log('   → Use when: Function accepts contexts where lock is held OR acquirable');
+  console.log('   → Provides best error messages (includes MaxHeldLock details)');
+  console.log('');
+  console.log('💡 Best Practice: Use ValidLockXContext for most function parameters!');
+  console.log('💡 Use CanAcquire<T, X> for fresh context pattern (no casts required)!');
 }
+
+// =============================================================================
+// COMPILE-TIME VALIDATION TESTS
+// =============================================================================
+// The following commented code demonstrates compile-time errors.
+// Uncomment any line to verify TypeScript prevents invalid operations.
+
+// ❌ INVALID: HasLock requires the lock to already be held
+// async function testHasLockViolation() {
+//   const ctx1 = await createLockContext().acquireWrite(LOCK_1);
+//   await requireLock2ToBeAlreadyHeld(ctx1); // ERROR: LOCK_2 not held
+//   ctx1.dispose();
+// }
+
+// ❌ INVALID: CanAcquireLock2 fails when holding higher lock
+// async function testCanAcquireViolation() {
+//   const ctx3 = await createLockContext().acquireWrite(LOCK_3);
+//   await ensureLock2CanBeAcquired(ctx3); // ERROR: Can't acquire LOCK_2 after LOCK_3
+//   ctx3.dispose();
+// }
+
+// ❌ INVALID: ValidLock2Context rejects contexts with lock ordering violations
+// async function testValidContextViolation() {
+//   const ctx4 = await createLockContext().acquireWrite(LOCK_4);
+//   await workWithLock2Context(ctx4); // ERROR: Can't acquire LOCK_2 after LOCK_4
+//   ctx4.dispose();
+// }
+
+// ✅ VALID: Demonstrating the differences between the three building blocks
+// async function testValidUsage() {
+//   // HasLock: Only accepts context with lock already held
+//   const has2 = await createLockContext().acquireWrite(LOCK_2);
+//   await requireLock2ToBeAlreadyHeld(has2);
+//   has2.dispose();
+//
+//   // CanAcquire: Accepts empty or contexts with lower locks
+//   const empty = createLockContext();
+//   await ensureLock2CanBeAcquired(empty);
+//   empty.dispose();
+//
+//   const with1 = await createLockContext().acquireWrite(LOCK_1);
+//   await ensureLock2CanBeAcquired(with1);
+//   with1.dispose();
+//
+//   // ValidContext: Most flexible - accepts both scenarios above
+//   const valid1 = createLockContext();
+//   await workWithLock2Context(valid1);
+//   valid1.dispose();
+//
+//   const valid2 = await createLockContext().acquireWrite(LOCK_2);
+//   await workWithLock2Context(valid2);
+//   valid2.dispose();
+// }
 
 // Allow direct execution
 if (require.main === module) {

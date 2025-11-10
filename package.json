@@ -30,6 +30,7 @@
     "test:all": "npm run test && npm run test:compile",
     "lint": "eslint src/core/**/*.ts",
     "lint:fix": "eslint src/core/**/*.ts --fix",
+    "lint:examples": "eslint src/examples/**/*.ts",
     "prepublishOnly": "npm run test:all && npm run lint && npm run build:clean"
   },
   "keywords": [

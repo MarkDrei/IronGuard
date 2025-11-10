@@ -414,13 +414,89 @@ class LockContext<THeldLocks extends readonly LockLevel[] = readonly []> {
   }
 }
 
+// Factory function to create an empty lock context
 function createLockContext(): LockContext<readonly []> {
   return new LockContext([] as const);
+}
+
+/**
+ * Validate lock ordering against an existing context.
+ * @internal
+ */
+function validateLockOrdering(
+  existingContext: LockContext<readonly LockLevel[]>,
+  lock: LockLevel
+): void {
+  const heldLocks = existingContext.getHeldLocks();
+
+  if (heldLocks.length > 0) {
+    const maxHeld = heldLocks[heldLocks.length - 1];
+    if (heldLocks.includes(lock)) {
+      throw new Error(
+        `Lock ordering violation: Cannot create fresh context with ` +
+        `LOCK_${lock} - already held in existing context ${heldLocks}`
+      );
+    }
+    if (maxHeld !== undefined && lock <= maxHeld) {
+      throw new Error(
+        `Lock ordering violation: Cannot create fresh context with ` +
+        `LOCK_${lock} when existing context holds LOCK_${maxHeld}`
+      );
+    }
+  }
+}
+
+/**
+ * Create a fresh context with a single read lock, validating at runtime that
+ * the provided context could acquire this lock (for ordering validation).
+ * Returns a new context with only the specified lock held in read mode.
+ *
+ * @param existingContext - Context to validate ordering against
+ * @param lock - Lock level to acquire in fresh context
+ * @returns Fresh context containing only the specified read lock
+ * @throws Error if lock ordering would be violated
+ */
+async function createFreshContextWithReadLock<
+  THeld extends readonly LockLevel[],
+  TLock extends LockLevel
+>(
+  existingContext: CanAcquire<THeld, TLock> extends true ? LockContext<THeld> : never,
+  lock: CanAcquire<THeld, TLock> extends true ? TLock : never
+): Promise<LockContext<readonly [TLock]>> {
+  validateLockOrdering(existingContext, lock);
+
+  const freshContext = new LockContext([] as const);
+  return await freshContext.acquireRead(lock) as LockContext<readonly [TLock]>;
+}
+
+/**
+ * Create a fresh context with a single write lock, validating at runtime that
+ * the provided context could acquire this lock (for ordering validation).
+ * Returns a new context with only the specified lock held in write mode.
+ *
+ * @param existingContext - Context to validate ordering against
+ * @param lock - Lock level to acquire in fresh context
+ * @returns Fresh context containing only the specified write lock
+ * @throws Error if lock ordering would be violated
+ */
+async function createFreshContextWithWriteLock<
+  THeld extends readonly LockLevel[],
+  TLock extends LockLevel
+>(
+  existingContext: CanAcquire<THeld, TLock> extends true ? LockContext<THeld> : never,
+  lock: CanAcquire<THeld, TLock> extends true ? TLock : never
+): Promise<LockContext<readonly [TLock]>> {
+  validateLockOrdering(existingContext, lock);
+
+  const freshContext = new LockContext([] as const);
+  return await freshContext.acquireWrite(lock) as LockContext<readonly [TLock]>;
 }
 
 export {
   LockContext,
   createLockContext,
+  createFreshContextWithReadLock,
+  createFreshContextWithWriteLock,
   LOCK_1,
   LOCK_2,
   LOCK_3,

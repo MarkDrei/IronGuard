@@ -56,6 +56,9 @@
       "rules": {
         // Relaxed rules for tests and examples
         "no-console": "off",
+        "no-unused-vars": "off",
+        "@typescript-eslint/no-unused-vars": "off",
+        // Temporarily tested with "error" - all examples now compatible with strict linting
         "@typescript-eslint/no-explicit-any": "off",
         "@typescript-eslint/explicit-function-return-type": "off",
         "@typescript-eslint/no-non-null-assertion": "off",

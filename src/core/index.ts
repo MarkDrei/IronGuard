@@ -9,6 +9,8 @@
 export {
   LockContext,
   createLockContext,
+  createFreshContextWithReadLock,
+  createFreshContextWithWriteLock,
   LOCK_1,
   LOCK_2,
   LOCK_3,
