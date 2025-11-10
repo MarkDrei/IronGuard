@@ -3,11 +3,13 @@
 /**
  * IronGuard Type System Building Blocks Demo
  * 
- * This example demonstrates the three composable building blocks of ironGuardTypes.ts:
+ * This example demonstrates the five composable building blocks of the type system:
  * 
  * 1. HasLock<THeld, Level> - Checks if a lock is already held in the context
  * 2. CanAcquire<THeld, TLock> - Generic type checking if lock TLock can be acquired
  * 3. ValidLockXContext<THeld> - Combines both checks with proper error messages
+ * 4. AllPrefixes<T> - Generates all valid ordered prefixes for maximum flexibility
+ * 5. OrderedSubsequences<T> - Generates all ordered subsequences (powerset) allowing lock skipping
  * 
  * The demo shows:
  * - How to use each building block type in function signatures
@@ -31,7 +33,12 @@ import {
   type LockLevel,
   type HasLock,
   type ValidLock2Context,
-  type CanAcquire
+  type CanAcquire,
+  type AllPrefixes,
+  type OrderedSubsequences,
+  LOCK_4,
+  LOCK_5,
+  LOCK_8
 } from '../core';// =============================================================================
 // BUILDING BLOCK 1: HasLock<THeld, Level>
 // Checks if a specific lock is already held in the context
@@ -130,6 +137,81 @@ async function workWithLock2Context<T extends readonly LockLevel[]>(
   _context: ValidLock2Context<T> extends string ? never : ValidLock2Context<T>
 ): Promise<void> {
   console.log(`   ✅ workWithLock2Context: LOCK_2 is held or can be acquired`);
+  await new Promise(resolve => setTimeout(resolve, 50));
+}
+
+// =============================================================================
+// BUILDING BLOCK 4: AllPrefixes<T>
+// Generates all valid ordered prefixes of a tuple for flexible function signatures
+// =============================================================================
+
+// Define a type alias for all valid lock contexts (up to LOCK_3 for this demo)
+type ValidLockContextsUpTo3 = AllPrefixes<readonly [1, 2, 3]>;
+// This produces: readonly [] | readonly [1] | readonly [1, 2] | readonly [1, 2, 3]
+type ValidLockContextsUpTo10 = AllPrefixes<readonly [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]>;
+
+/**
+ * Example function that accepts ANY valid ordered lock state up to LOCK_3
+ * Uses AllPrefixes to automatically generate all valid combinations
+ * This is the most flexible approach for functions that can adapt to any lock state
+ */
+async function flexibleFunctionUpToLock3(
+  context: LockContext<ValidLockContextsUpTo3>
+): Promise<void> {
+  console.log(`   ✅ flexibleFunctionUpToLock3: Accepted context ${context.toString()}`);
+  console.log(`      This function works with ANY ordered lock state: [], [1], [1,2], or [1,2,3]`);
+  context.acquireRead(LOCK_4);
+  await new Promise(resolve => setTimeout(resolve, 50));
+}
+
+/**
+ * More advanced: Flexible function that works with locks up to LOCK_5
+ */
+type ValidLockContextsUpTo5 = AllPrefixes<readonly [1, 2, 3, 4, 5]>;
+
+async function flexibleFunctionUpToLock5(
+  context: LockContext<ValidLockContextsUpTo5>
+): Promise<void> {
+  console.log(`   ✅ flexibleFunctionUpToLock5: Accepted context ${context.toString()}`);
+  await new Promise(resolve => setTimeout(resolve, 50));
+}
+
+// =============================================================================
+// BUILDING BLOCK 5: OrderedSubsequences<T>
+// Generates all ordered subsequences (powerset) allowing non-contiguous acquisition
+// =============================================================================
+
+// Define a type alias for all ordered subsequences up to LOCK_3
+type ValidLockSubsequencesUpTo3 = OrderedSubsequences<readonly [1, 2, 3]>;
+// This produces: readonly [] | readonly [1] | readonly [2] | readonly [3] | 
+//                readonly [1, 2] | readonly [1, 3] | readonly [2, 3] | readonly [1, 2, 3]
+
+/**
+ * Example function that accepts ANY ordered subsequence up to LOCK_3
+ * More permissive than AllPrefixes - allows skipping locks while maintaining order
+ */
+async function veryFlexibleFunctionUpTo3(
+  context: LockContext<ValidLockSubsequencesUpTo3>
+): Promise<void> {
+  console.log(`   ✅ veryFlexibleFunctionUpTo3: Accepted context ${context.toString()}`);
+  console.log(`      This function works with ANY ordered combination: [], [1], [2], [3], [1,2], [1,3], [2,3], or [1,2,3]`);
+  context.acquireRead(LOCK_4);
+  let foo = await context.acquireRead(LOCK_4);
+  veryFlexibleFunctionUpTo4(foo);
+  await new Promise(resolve => setTimeout(resolve, 50));
+}
+
+/**
+ * More permissive: Accepts any ordered subsequence up to LOCK_4
+ */
+type ValidLockSubsequencesUpTo4 = OrderedSubsequences<readonly [1, 2, 3, 4]>;
+
+async function veryFlexibleFunctionUpTo4(
+  context: LockContext<ValidLockSubsequencesUpTo4>
+): Promise<void> {
+  console.log(`   ✅ veryFlexibleFunctionUpTo4: Accepted context ${context.toString()}`);
+  context.acquireRead(LOCK_8);
+  
   await new Promise(resolve => setTimeout(resolve, 50));
 }
 
@@ -246,10 +328,100 @@ export async function runContextTransferDemo(): Promise<void> {
   console.log('');
   
   // =============================================================================
-  // PART 4: CHAINED WORKFLOW - Progressive lock acquisition
+  // PART 4: AllPrefixes<T> - Flexible function signatures
   // =============================================================================
   
-  console.log('📌 PART 4: CHAINED WORKFLOW');
+  console.log('📌 PART 4: AllPrefixes<T>');
+  console.log('Generates all valid ordered prefixes automatically for maximum flexibility\n');
+  
+  console.log('Example 4a: Empty context → flexibleFunctionUpToLock3()');
+  const flexEmpty = createLockContext();
+  await flexibleFunctionUpToLock3(flexEmpty);
+  flexEmpty.dispose();
+  console.log('');
+  
+  console.log('Example 4b: Context with LOCK_1 → flexibleFunctionUpToLock3()');
+  const flex1 = await createLockContext().acquireWrite(LOCK_1);
+  await flexibleFunctionUpToLock3(flex1);
+  flex1.dispose();
+  console.log('');
+  
+  console.log('Example 4c: Context with LOCK_1 + LOCK_2 → flexibleFunctionUpToLock3()');
+  const flex12 = await createLockContext().acquireRead(LOCK_1);
+  const flex12b = await flex12.acquireWrite(LOCK_2);
+  await flexibleFunctionUpToLock3(flex12b);
+  flex12b.dispose();
+  console.log('');
+  
+  console.log('Example 4d: Context with LOCK_1 + LOCK_2 + LOCK_3 → flexibleFunctionUpToLock3()');
+  const flex123 = await createLockContext().acquireWrite(LOCK_1);
+  const flex123b = await flex123.acquireRead(LOCK_2);
+  const flex123c = await flex123b.acquireWrite(LOCK_3);
+  await flexibleFunctionUpToLock3(flex123c);
+  flex123c.dispose();
+  console.log('');
+  
+  console.log('Example 4e: Context with LOCK_1 + LOCK_2 + LOCK_3 + LOCK_4 → flexibleFunctionUpToLock5()');
+  const flex1234 = await createLockContext().acquireWrite(LOCK_1);
+  const flex1234b = await flex1234.acquireRead(LOCK_2);
+  const flex1234c = await flex1234b.acquireWrite(LOCK_3);
+  const flex1234d = await flex1234c.acquireRead(4);
+  await flexibleFunctionUpToLock5(flex1234d);
+  flex1234d.dispose();
+  console.log('');
+  
+  // =============================================================================
+  // PART 5: OrderedSubsequences<T> - Most permissive ordered combinations
+  // =============================================================================
+  
+  console.log('📌 PART 5: OrderedSubsequences<T>');
+  console.log('Generates all ordered subsequences (powerset) - allows lock skipping\n');
+  
+  console.log('Example 5a: Empty context → veryFlexibleFunctionUpTo3()');
+  const veryFlexEmpty = createLockContext();
+  await veryFlexibleFunctionUpTo3(veryFlexEmpty);
+  veryFlexEmpty.dispose();
+  console.log('');
+  
+  console.log('Example 5b: Context with LOCK_1 → veryFlexibleFunctionUpTo3()');
+  const veryFlex1 = await createLockContext().acquireWrite(LOCK_1);
+  await veryFlexibleFunctionUpTo3(veryFlex1);
+  veryFlex1.dispose();
+  console.log('');
+  
+  console.log('Example 5c: Context with LOCK_2 (skipped LOCK_1) → veryFlexibleFunctionUpTo3()');
+  const veryFlex2 = await createLockContext().acquireRead(LOCK_2);
+  await veryFlexibleFunctionUpTo3(veryFlex2);
+  veryFlex2.dispose();
+  console.log('');
+  
+  console.log('Example 5d: Context with LOCK_1 + LOCK_3 (skipped LOCK_2) → veryFlexibleFunctionUpTo3()');
+  const veryFlex13 = await createLockContext().acquireWrite(LOCK_1);
+  const veryFlex13b = await veryFlex13.acquireRead(LOCK_3);
+  await veryFlexibleFunctionUpTo3(veryFlex13b);
+  veryFlex13b.dispose();
+  console.log('');
+  
+  console.log('Example 5e: Context with LOCK_2 + LOCK_3 (skipped LOCK_1) → veryFlexibleFunctionUpTo3()');
+  const veryFlex23 = await createLockContext().acquireWrite(LOCK_2);
+  const veryFlex23b = await veryFlex23.acquireRead(LOCK_3);
+  await veryFlexibleFunctionUpTo3(veryFlex23b);
+  veryFlex23b.dispose();
+  console.log('');
+  
+  console.log('Example 5f: Context with LOCK_1 + LOCK_3 + LOCK_4 (skipped LOCK_2) → veryFlexibleFunctionUpTo4()');
+  const veryFlex134 = await createLockContext().acquireWrite(LOCK_1);
+  const veryFlex134b = await veryFlex134.acquireRead(LOCK_3);
+  const veryFlex134c = await veryFlex134b.acquireWrite(4);
+  await veryFlexibleFunctionUpTo4(veryFlex134c);
+  veryFlex134c.dispose();
+  console.log('');
+  
+  // =============================================================================
+  // PART 6: CHAINED WORKFLOW - Progressive lock acquisition
+  // =============================================================================
+  
+  console.log('📌 PART 6: CHAINED WORKFLOW');
   console.log('Demonstrating progressive lock acquisition with function calls\n');
   
   await demonstrateChainedWorkflow();
@@ -275,8 +447,21 @@ export async function runContextTransferDemo(): Promise<void> {
   console.log('   → Use when: Function accepts contexts where lock is held OR acquirable');
   console.log('   → Provides best error messages (includes MaxHeldLock details)');
   console.log('');
+  console.log('4. AllPrefixes<T>');
+  console.log('   → Generates all valid ordered prefixes: [] | [1] | [1,2] | [1,2,3] | ...');
+  console.log('   → Use when: Function should accept ANY valid ordered lock state');
+  console.log('   → Perfect for truly flexible functions that adapt to any context');
+  console.log('');
+  console.log('5. OrderedSubsequences<T>');
+  console.log('   → Generates all ordered subsequences (powerset): [] | [1] | [2] | [1,2] | [1,3] | ...');
+  console.log('   → Most permissive: Allows lock skipping while maintaining order');
+  console.log('   → Use when: Need maximum flexibility with non-contiguous lock patterns');
+  console.log('   → Critical: Order is preserved for deadlock prevention');
+  console.log('');
   console.log('💡 Best Practice: Use ValidLockXContext for most function parameters!');
   console.log('💡 Use CanAcquire<T, X> for fresh context pattern (no casts required)!');
+  console.log('💡 Use AllPrefixes<T> for maximum flexibility with multiple lock states!');
+  console.log('💡 Use OrderedSubsequences<T> when lock skipping patterns are needed!');
 }
 
 // =============================================================================

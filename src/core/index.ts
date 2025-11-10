@@ -33,6 +33,8 @@ export type {
   LockLevel,
   Contains,
   CanAcquire,
+  AllPrefixes,
+  OrderedSubsequences,
   PrefixUpTo
 } from './ironGuardSystem';
 

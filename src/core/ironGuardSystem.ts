@@ -278,6 +278,77 @@ type CanAcquire<THeld extends readonly LockLevel[], TLock extends LockLevel> =
                                       ? true : false
                                     : true;  // Fallback for edge cases
 
+/**
+ * Generates all valid ordered prefixes of a tuple.
+ * 
+ * This recursive type creates a union of all possible ordered prefixes from a tuple.
+ * For example, given [1, 2, 3], it produces: [] | [1] | [1, 2] | [1, 2, 3]
+ * 
+ * This is particularly useful for accepting any valid lock context state where
+ * a function needs to work with various lock combinations. Instead of manually
+ * enumerating all valid states, this type generates them automatically.
+ * 
+ * @example
+ * ```typescript
+ * // For SUPPORTED_LOCK_LEVELS = [1, 2, 3, 4, 5]
+ * type ValidLockContexts = AllPrefixes<SUPPORTED_LOCK_LEVELS>;
+ * // Produces: [] | [1] | [1, 2] | [1, 2, 3] | [1, 2, 3, 4] | [1, 2, 3, 4, 5]
+ * 
+ * // Use in function signatures:
+ * async function flexibleFunction(
+ *   context: LockContext<ValidLockContexts>
+ * ): Promise<void> {
+ *   // Function accepts any valid ordered lock state
+ * }
+ * ```
+ * 
+ * @template T - The tuple to generate prefixes from (typically SUPPORTED_LOCK_LEVELS)
+ */
+type AllPrefixes<T extends readonly any[]> = 
+  T extends readonly [infer First, ...infer Rest]
+    ? readonly [] | readonly [First] | readonly [First, ...AllPrefixes<Rest>]
+    : readonly [];
+
+/**
+ * Generates all ordered subsequences maintaining the original order.
+ * 
+ * This recursive type creates a union of all possible ordered subsequences (powerset)
+ * from a tuple while preserving the ordering. This is more permissive than AllPrefixes
+ * as it allows non-contiguous lock acquisition patterns.
+ * 
+ * For example, given [1, 2, 3], it produces:
+ * [] | [1] | [2] | [3] | [1, 2] | [1, 3] | [2, 3] | [1, 2, 3]
+ * 
+ * This enables flexible lock acquisition patterns where locks can be skipped:
+ * - Acquire lock 1, skip lock 2, acquire lock 3 → [1, 3]
+ * - Skip lock 1, acquire lock 2 and 3 → [2, 3]
+ * - Any ordered combination while maintaining deadlock prevention
+ * 
+ * The key property is that order is preserved: if lock A comes before lock B in
+ * the original sequence, and both are acquired, then A must be acquired before B.
+ * This maintains the hierarchical ordering critical for deadlock prevention.
+ * 
+ * @example
+ * ```typescript
+ * // For SUPPORTED_LOCK_LEVELS = [1, 2, 3]
+ * type ValidLockContextsFlexible = OrderedSubsequences<SUPPORTED_LOCK_LEVELS>;
+ * // Produces: [] | [1] | [2] | [3] | [1,2] | [1,3] | [2,3] | [1,2,3]
+ * 
+ * // Use in function signatures for maximum flexibility:
+ * async function veryFlexibleFunction(
+ *   context: LockContext<ValidLockContextsFlexible>
+ * ): Promise<void> {
+ *   // Function accepts ANY ordered lock combination
+ * }
+ * ```
+ * 
+ * @template T - The tuple to generate ordered subsequences from (typically SUPPORTED_LOCK_LEVELS)
+ */
+type OrderedSubsequences<T extends readonly any[]> =
+  T extends readonly [infer First, ...infer Rest]
+    ? OrderedSubsequences<Rest> | readonly [First, ...OrderedSubsequences<Rest>]
+    : readonly [];
+
 class LockContext<THeldLocks extends readonly LockLevel[] = readonly []> {
   private heldLocks: THeldLocks;
   private lockModes = new Map<LockLevel, LockMode>();
@@ -519,5 +590,7 @@ export type {
   LockMode,
   Contains,
   CanAcquire,
+  AllPrefixes,
+  OrderedSubsequences,
   PrefixUpTo
 };

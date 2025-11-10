@@ -49,6 +49,13 @@ export type {
   ValidLock15Context
 } from './core/ironGuardTypes';
 
+// Generic type utilities from ironGuardSystem
+export type {
+  CanAcquire,
+  AllPrefixes,
+  OrderedSubsequences
+} from './core/ironGuardSystem';
+
 // Utility building blocks for advanced usage
 export type {
   HasLock,
