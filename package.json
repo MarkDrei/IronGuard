@@ -1,6 +1,6 @@
 {
   "name": "@markdrei/ironguard-typescript-locks",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "IronGuard: Unbreakable TypeScript lock system with compile-time deadlock prevention and runtime mutual exclusion",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
