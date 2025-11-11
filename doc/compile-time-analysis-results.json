@@ -1,0 +1,122 @@
+[
+  {
+    "lockLevel": 1,
+    "typeDefinitionOnly": 1030,
+    "withFunctionUsage": 1082.3333333333333,
+    "withMultipleFunctions": 1067
+  },
+  {
+    "lockLevel": 2,
+    "typeDefinitionOnly": 1030.3333333333333,
+    "withFunctionUsage": 1038,
+    "withMultipleFunctions": 1014.6666666666666
+  },
+  {
+    "lockLevel": 3,
+    "typeDefinitionOnly": 1025.3333333333333,
+    "withFunctionUsage": 1027,
+    "withMultipleFunctions": 1020.6666666666666
+  },
+  {
+    "lockLevel": 4,
+    "typeDefinitionOnly": 1042.6666666666667,
+    "withFunctionUsage": 1028.6666666666667,
+    "withMultipleFunctions": 1010.3333333333334
+  },
+  {
+    "lockLevel": 5,
+    "typeDefinitionOnly": 1010,
+    "withFunctionUsage": 1018.6666666666666,
+    "withMultipleFunctions": 1006.6666666666666
+  },
+  {
+    "lockLevel": 6,
+    "typeDefinitionOnly": 1013.3333333333334,
+    "withFunctionUsage": 1024.3333333333333,
+    "withMultipleFunctions": 1035
+  },
+  {
+    "lockLevel": 7,
+    "typeDefinitionOnly": 1042.6666666666667,
+    "withFunctionUsage": 1045.3333333333333,
+    "withMultipleFunctions": 1046.6666666666667
+  },
+  {
+    "lockLevel": 8,
+    "typeDefinitionOnly": 1019,
+    "withFunctionUsage": 1050.6666666666667,
+    "withMultipleFunctions": 1057.6666666666667
+  },
+  {
+    "lockLevel": 9,
+    "typeDefinitionOnly": 1035,
+    "withFunctionUsage": 1053.6666666666667,
+    "withMultipleFunctions": 1065.6666666666667
+  },
+  {
+    "lockLevel": 10,
+    "typeDefinitionOnly": 1022.6666666666666,
+    "withFunctionUsage": 1085,
+    "withMultipleFunctions": 1090
+  },
+  {
+    "lockLevel": 11,
+    "typeDefinitionOnly": 1024.6666666666667,
+    "withFunctionUsage": 1124.3333333333333,
+    "withMultipleFunctions": 1132
+  },
+  {
+    "lockLevel": 12,
+    "typeDefinitionOnly": 1030.3333333333333,
+    "withFunctionUsage": 1220.3333333333333,
+    "withMultipleFunctions": 1214.3333333333333
+  },
+  {
+    "lockLevel": 13,
+    "typeDefinitionOnly": 1049.3333333333333,
+    "withFunctionUsage": 1320.6666666666667,
+    "withMultipleFunctions": 1314
+  },
+  {
+    "lockLevel": 14,
+    "typeDefinitionOnly": 1087.6666666666667,
+    "withFunctionUsage": 1619.6666666666667,
+    "withMultipleFunctions": 1649
+  },
+  {
+    "lockLevel": 15,
+    "typeDefinitionOnly": 1116.6666666666667,
+    "withFunctionUsage": 2161.6666666666665,
+    "withMultipleFunctions": 2182.3333333333335
+  },
+  {
+    "lockLevel": 16,
+    "typeDefinitionOnly": 1233.3333333333333,
+    "withFunctionUsage": 1238,
+    "withMultipleFunctions": 1242
+  },
+  {
+    "lockLevel": 17,
+    "typeDefinitionOnly": 1414.3333333333333,
+    "withFunctionUsage": 1432.3333333333333,
+    "withMultipleFunctions": 1458.6666666666667
+  },
+  {
+    "lockLevel": 18,
+    "typeDefinitionOnly": 1436,
+    "withFunctionUsage": 1434.6666666666667,
+    "withMultipleFunctions": 1428.3333333333333
+  },
+  {
+    "lockLevel": 19,
+    "typeDefinitionOnly": 1421,
+    "withFunctionUsage": 1428,
+    "withMultipleFunctions": 1451.3333333333333
+  },
+  {
+    "lockLevel": 20,
+    "typeDefinitionOnly": 1439,
+    "withFunctionUsage": 1429,
+    "withMultipleFunctions": 1455.6666666666667
+  }
+]
