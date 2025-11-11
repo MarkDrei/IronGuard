@@ -20,8 +20,8 @@ const path = require('path');
 
 const SCRIPT_DIR = __dirname;
 const TEMP_DIR = path.join(SCRIPT_DIR, '../.tmp-compile-analysis');
-const RESULTS_FILE = path.join(SCRIPT_DIR, '../doc/compile-time-analysis-results.json');
-const REPORT_FILE = path.join(SCRIPT_DIR, '../doc/compile-time-analysis-report.md');
+const RESULTS_FILE = path.join(SCRIPT_DIR, 'results.json');
+const REPORT_FILE = path.join(SCRIPT_DIR, 'analysis-report.md');
 
 /**
  * Generate test file with just type definitions

@@ -12,7 +12,7 @@ const path = require('path');
 
 const SCRIPT_DIR = __dirname;
 const TEMP_DIR = path.join(SCRIPT_DIR, '../.tmp-detailed-analysis');
-const OUTPUT_FILE = path.join(SCRIPT_DIR, '../doc/detailed-analysis-level15.md');
+const OUTPUT_FILE = path.join(SCRIPT_DIR, 'detailed-analysis.md');
 
 /**
  * Measure compilation time with detailed output
