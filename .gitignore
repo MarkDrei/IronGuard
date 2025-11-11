@@ -24,3 +24,5 @@ coverage/
 # Temporary files
 *.tmp
 *.temp
+.tmp-compile-analysis/
+.tmp-detailed-analysis/
