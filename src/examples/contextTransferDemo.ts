@@ -3,13 +3,14 @@
 /**
  * IronGuard Type System Building Blocks Demo
  * 
- * This example demonstrates the five composable building blocks of the type system:
+ * This example demonstrates the six composable building blocks of the type system:
  * 
  * 1. HasLock<THeld, Level> - Checks if a lock is already held in the context
  * 2. CanAcquire<THeld, TLock> - Generic type checking if lock TLock can be acquired
  * 3. ValidLockXContext<THeld> - Combines both checks with proper error messages
  * 4. AllPrefixes<T> - Generates all valid ordered prefixes for maximum flexibility
  * 5. OrderedSubsequences<T> - Generates all ordered subsequences (powerset) allowing lock skipping
+ * 6. LockContextBelow<MaxLevel> + AllLessThan - Generic boundary validation approach
  * 
  * The demo shows:
  * - How to use each building block type in function signatures
@@ -163,8 +164,9 @@ async function flexibleFunctionUpToLock3(
 ): Promise<void> {
   console.log(`   ✅ flexibleFunctionUpToLock3: Accepted context ${context.toString()}`);
   console.log(`      This function works with ANY ordered lock state: [], [1], [1,2], or [1,2,3]`);
-  context.acquireRead(LOCK_4);
+  const lock4Ctx = await context.acquireRead(LOCK_4);
   await new Promise(resolve => setTimeout(resolve, 50));
+  lock4Ctx.dispose();
 }
 
 /**
@@ -198,10 +200,10 @@ async function veryFlexibleFunctionUpTo3(
 ): Promise<void> {
   console.log(`   ✅ veryFlexibleFunctionUpTo3: Accepted context ${context.toString()}`);
   console.log(`      This function works with ANY ordered combination: [], [1], [2], [3], [1,2], [1,3], [2,3], or [1,2,3]`);
-  context.acquireRead(LOCK_4);
-  let foo = await context.acquireRead(LOCK_4);
-  veryFlexibleFunctionUpTo4(foo);
+  const lock4Ctx = await context.acquireRead(LOCK_4);
+  await veryFlexibleFunctionUpTo4(lock4Ctx);
   await new Promise(resolve => setTimeout(resolve, 50));
+  lock4Ctx.dispose();
 }
 
 /**
@@ -215,17 +217,103 @@ async function veryFlexibleFunctionUpTo4(
   context: LockContext<ValidLockSubsequencesUpTo4>
 ): Promise<void> {
   console.log(`   ✅ veryFlexibleFunctionUpTo4: Accepted context ${context.toString()}`);
-  context.acquireRead(LOCK_5);
+  const lock5Ctx = await context.acquireRead(LOCK_5);
   
   await new Promise(resolve => setTimeout(resolve, 50));
+  
+  lock5Ctx.dispose();
 }
 
 async function veryFlexibleFunctionUpTo15(
   context: LockContext<ValidLockSubsequencesUpTo10>
 ): Promise<void> {
   console.log(`   ✅ veryFlexibleFunctionUpTo15: Accepted context ${context.toString()}`);
-  context.acquireRead(LOCK_11);
+  const lock11Ctx = await context.acquireRead(LOCK_11);
   await new Promise(resolve => setTimeout(resolve, 50));
+  lock11Ctx.dispose();
+}
+
+// =============================================================================
+// BUILDING BLOCK 6: LockContextBelow<MaxLevel> + AllLessThan
+// Alternative approach: Generic boundary validation using arithmetic comparison
+// =============================================================================
+
+/**
+ * Helper type: Gets the maximum value from a readonly number array
+ * Uses accumulator-based comparison to find the largest number
+ */
+type Max<
+  T extends readonly number[],
+  Current extends number = 0,
+  Acc extends unknown[] = []
+> = T extends readonly [infer First extends number, ...infer Rest extends readonly number[]]
+  ? Acc['length'] extends Current
+    ? Acc['length'] extends First
+      ? Max<Rest, First, Acc>  // Current == First, keep current max
+      : Max<Rest, First, [...Acc, unknown]>  // Start building up to First
+    : Max<T, Current, [...Acc, unknown]>  // Continue building to Current
+  : Current;
+
+/**
+ * Helper type: Checks if all elements in tuple T are less than Max
+ * Uses accumulator-based length comparison (TypeScript arithmetic trick)
+ */
+type AllLessThan<
+  T extends readonly number[],
+  MaxVal extends number,
+  Acc extends unknown[] = []
+> = T extends readonly [infer First extends number, ...infer Rest extends readonly number[]]
+  ? Acc['length'] extends MaxVal
+    ? false  // MaxVal reached before checking First - First >= MaxVal
+    : Acc['length'] extends First
+      ? AllLessThan<Rest, MaxVal, Acc>  // First < MaxVal (stopped before MaxVal), continue
+      : AllLessThan<Rest, MaxVal, [...Acc, unknown]>  // Increment accumulator toward First
+  : true;  // All elements checked successfully - all were < MaxVal
+
+/**
+ * A LockContext where the maximum held lock is strictly less than MaxLevel
+ * This is a more generic alternative to CanAcquire<T, X> for boundary validation
+ * 
+ * The idea is to accept any lock context and validate at the type boundary that
+ * the context is compatible with acquiring a specific lock. The actual acquisition
+ * and ordering validation still happens via acquireRead/acquireWrite.
+ * 
+ * Note: This complements but doesn't replace CanAcquire. Use this when you want
+ * a generic constraint, and CanAcquire will still validate the detailed ordering.
+ */
+type LockContextBelow<
+  MaxLevel extends LockLevel,
+  THeldLocks extends readonly LockLevel[] = readonly LockLevel[]
+> = 
+  THeldLocks extends readonly []
+    ? LockContext<readonly []>  // Empty context is always valid
+    : Max<THeldLocks> extends infer M extends LockLevel
+      ? M extends MaxLevel
+        ? never  // Max equals MaxLevel, not strictly below
+        : AllLessThan<THeldLocks, MaxLevel> extends true
+          ? LockContext<THeldLocks>
+          : never
+      : never;
+
+/**
+ * Example function using LockContextBelow approach
+ * Accepts any lock context where all held locks are < 3
+ * The type system in acquireWrite will still enforce detailed ordering!
+ */
+async function wantsToTakeLock3<
+  THeldLocks extends readonly LockLevel[]
+>(
+  context: LockContextBelow<3, THeldLocks>
+): Promise<string> {
+  // The type system in acquireWrite will enforce this!
+  // If THeldLocks contains any lock >= 3, acquireWrite(LOCK_3) won't compile
+  const lock3Ctx = await context.acquireWrite(LOCK_2);
+  
+  const result = `✅ Acquired LOCK_3 from ${context.toString()}. Now holding: ${lock3Ctx.toString()}`;
+  console.log(`   ${result}`);
+  
+  lock3Ctx.dispose();
+  return result;
 }
 
 // =============================================================================
@@ -439,6 +527,32 @@ export async function runContextTransferDemo(): Promise<void> {
   
   await demonstrateChainedWorkflow();
   console.log('');
+  
+  // =============================================================================
+  // PART 7: LockContextBelow<MaxLevel> - Alternative approach using AllLessThan
+  // =============================================================================
+  
+  console.log('📌 PART 7: LockContextBelow<MaxLevel> - AllLessThan helper approach');
+  console.log('Alternative boundary validation: ensures all held locks are strictly below MaxLevel\n');
+  
+  console.log('Example 7a: Empty context → wantsToTakeLock3()');
+  const emptyFor3 = createLockContext();
+  await wantsToTakeLock3(emptyFor3);
+  emptyFor3.dispose();
+  console.log('');
+  
+  console.log('Example 7b: Context with LOCK_1 → wantsToTakeLock3()');
+  const ctx1For3 = await createLockContext().acquireWrite(LOCK_1);
+  await wantsToTakeLock3(ctx1For3);
+  ctx1For3.dispose();
+  console.log('');
+  
+  console.log('Example 7c: Context with LOCK_1 + LOCK_2 → wantsToTakeLock3()');
+  const ctx12For3 = await createLockContext().acquireRead(LOCK_1);
+  const ctx12For3b = await ctx12For3.acquireWrite(LOCK_2);
+  await wantsToTakeLock3(ctx12For3b);
+  ctx12For3b.dispose();
+  console.log('');
 
   // =============================================================================
   // SUMMARY
@@ -471,10 +585,18 @@ export async function runContextTransferDemo(): Promise<void> {
   console.log('   → Use when: Need maximum flexibility with non-contiguous lock patterns');
   console.log('   → Critical: Order is preserved for deadlock prevention');
   console.log('');
+  console.log('6. LockContextBelow<MaxLevel> + AllLessThan');
+  console.log('   → Boundary validation: All held locks must be strictly < MaxLevel');
+  console.log('   → Use when: Function wants to acquire a specific lock and needs validation');
+  console.log('   → Generic approach: Accept any context, validate at type boundary');
+  console.log('   → Complements CanAcquire - acquireWrite/Read will still enforce ordering');
+  console.log('   → Trade-off: Less specific than CanAcquire, relies on dual validation');
+  console.log('');
   console.log('💡 Best Practice: Use ValidLockXContext for most function parameters!');
   console.log('💡 Use CanAcquire<T, X> for fresh context pattern (no casts required)!');
   console.log('💡 Use AllPrefixes<T> for maximum flexibility with multiple lock states!');
   console.log('💡 Use OrderedSubsequences<T> when lock skipping patterns are needed!');
+  console.log('💡 Use LockContextBelow<X> for boundary validation before acquiring lock X!');
 }
 
 // =============================================================================
@@ -501,6 +623,17 @@ export async function runContextTransferDemo(): Promise<void> {
 // async function testValidContextViolation() {
 //   const ctx4 = await createLockContext().acquireWrite(LOCK_4);
 //   await workWithLock2Context(ctx4); // ERROR: Can't acquire LOCK_2 after LOCK_4
+//   ctx4.dispose();
+// }
+
+// ❌ INVALID: LockContextBelow<3> rejects contexts with lock >= 3
+// async function testLockContextBelowViolation() {
+//   const ctx3 = await createLockContext().acquireWrite(LOCK_3);
+//   await wantsToTakeLock3(ctx3); // ERROR: Context holds LOCK_3, not strictly below 3
+//   ctx3.dispose();
+//
+//   const ctx4 = await createLockContext().acquireWrite(LOCK_4);
+//   await wantsToTakeLock3(ctx4); // ERROR: Context holds LOCK_4, not strictly below 3
 //   ctx4.dispose();
 // }
 

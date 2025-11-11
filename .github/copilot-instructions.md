@@ -1,6 +1,7 @@
 # IronGuard - TypeScript Lock Order System
 
 This is a TypeScript project that implements compile-time lock order violation detection with runtime mutual exclusion.
+Compile time safety is the primary goal, no simplifications which would compromise that are allowed.
 
 ## Project Context
 
@@ -10,10 +11,9 @@ This is a TypeScript project that implements compile-time lock order violation d
 
 ## Key Concepts
 
-- **Lock Levels**: 1-5 representing increasing privilege levels
+- **Lock Levels**: 1-15 representing increasing privilege levels
 - **Lock Ordering**: Must acquire locks in ascending order (can skip levels)
 - **Type Safety**: Functions can declare lock requirements validated at compile-time
-- **Flexible Patterns**: Support for lock skipping and conditional acquisition
 
 ## Code Architecture
 
