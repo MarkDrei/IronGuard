@@ -25,6 +25,7 @@ const REPORT_FILE = path.join(SCRIPT_DIR, '../doc/compile-time-analysis-report.m
 
 /**
  * Generate test file with just type definitions
+ * All cases from 1 to lockLevel are included in the sequence
  * @param {number} lockLevel 
  * @returns {string}
  */
@@ -34,7 +35,7 @@ function generateTypeDefinitionFile(lockLevel) {
   return `
 import type { LockContext, OrderedSubsequences, AllPrefixes } from '../src/core';
 
-// Type definition only - no usage
+// Type definition covering all lock levels from 1 to ${lockLevel}
 type TestOrderedSubsequences = OrderedSubsequences<readonly [${sequence}]>;
 type TestAllPrefixes = AllPrefixes<readonly [${sequence}]>;
 
@@ -45,81 +46,121 @@ export type { TestOrderedSubsequences, TestAllPrefixes };
 
 /**
  * Generate test file with function usage
+ * Function uses the type and acquires an additional lock inside
  * @param {number} lockLevel
  * @returns {string}
  */
 function generateFunctionUsageFile(lockLevel) {
   const sequence = Array.from({ length: lockLevel }, (_, i) => i + 1).join(', ');
+  // For acquiring a lock inside, use the next level after lockLevel
+  const nextLock = lockLevel + 1;
   
   return `
+import { createLockContext } from '../src/core';
 import type { LockContext, OrderedSubsequences, AllPrefixes } from '../src/core';
 
 type TestOrderedSubsequences = OrderedSubsequences<readonly [${sequence}]>;
 type TestAllPrefixes = AllPrefixes<readonly [${sequence}]>;
 
-// Single function using the type
+// Function using the type and acquiring an additional lock
 async function testFunction(
   context: LockContext<TestOrderedSubsequences>
 ): Promise<void> {
-  console.log(context.toString());
+  // Acquire another lock inside the function to test impact on compile time
+  const nextContext = await context.acquireRead(${nextLock});
+  console.log(nextContext.toString());
+  nextContext.dispose();
+}
+
+// Actually call the function to ensure TypeScript fully type-checks it
+async function runTest() {
+  const ctx = createLockContext();
+  await testFunction(ctx);
+  ctx.dispose();
 }
 
 // Export to prevent tree-shaking
-export { testFunction };
+export { testFunction, runTest };
 export type { TestOrderedSubsequences, TestAllPrefixes };
 `;
 }
 
 /**
  * Generate test file with multiple function usages
+ * Each function acquires an additional lock and is actually called
  * @param {number} lockLevel
  * @returns {string}
  */
 function generateMultipleFunctionsFile(lockLevel) {
   const sequence = Array.from({ length: lockLevel }, (_, i) => i + 1).join(', ');
+  const nextLock = lockLevel + 1;
+  const nextLock2 = lockLevel + 2;
+  const nextLock3 = lockLevel + 3;
   
   return `
+import { createLockContext } from '../src/core';
 import type { LockContext, OrderedSubsequences, AllPrefixes } from '../src/core';
 
 type TestOrderedSubsequences = OrderedSubsequences<readonly [${sequence}]>;
 type TestAllPrefixes = AllPrefixes<readonly [${sequence}]>;
 
-// Multiple functions using the type
+// Multiple functions using the type, each acquiring an additional lock
 async function testFunction1(
   context: LockContext<TestOrderedSubsequences>
 ): Promise<void> {
-  console.log(context.toString());
+  const nextCtx = await context.acquireRead(${nextLock});
+  console.log(nextCtx.toString());
+  nextCtx.dispose();
 }
 
 async function testFunction2(
   context: LockContext<TestAllPrefixes>
 ): Promise<void> {
-  console.log(context.toString());
+  const nextCtx = await context.acquireWrite(${nextLock});
+  console.log(nextCtx.toString());
+  nextCtx.dispose();
 }
 
 async function testFunction3(
   context: LockContext<TestOrderedSubsequences>
 ): Promise<void> {
-  const result = context.toString();
-  return testFunction1(context);
+  const nextCtx = await context.acquireRead(${nextLock2});
+  await testFunction1(nextCtx);
+  nextCtx.dispose();
 }
 
 async function testFunction4(
   context: LockContext<TestAllPrefixes>
 ): Promise<void> {
-  return testFunction2(context);
+  const nextCtx = await context.acquireWrite(${nextLock2});
+  await testFunction2(nextCtx);
+  nextCtx.dispose();
 }
 
 async function testFunction5(
   ctx1: LockContext<TestOrderedSubsequences>,
   ctx2: LockContext<TestAllPrefixes>
 ): Promise<void> {
-  await testFunction1(ctx1);
-  await testFunction2(ctx2);
+  const next1 = await ctx1.acquireRead(${nextLock3});
+  const next2 = await ctx2.acquireWrite(${nextLock3});
+  console.log(next1.toString(), next2.toString());
+  next1.dispose();
+  next2.dispose();
+}
+
+// Actually call the functions to ensure full type-checking
+async function runAllTests() {
+  const ctx = createLockContext();
+  await testFunction1(ctx);
+  await testFunction2(ctx);
+  await testFunction3(ctx);
+  await testFunction4(ctx);
+  await testFunction5(ctx, ctx);
+  ctx.dispose();
 }
 
 // Export to prevent tree-shaking
-export { testFunction1, testFunction2, testFunction3, testFunction4, testFunction5 };
+export { testFunction1, testFunction2, testFunction3, testFunction4, testFunction5, runAllTests };
 export type { TestOrderedSubsequences, TestAllPrefixes };
 `;
 }

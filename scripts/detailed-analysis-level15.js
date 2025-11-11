@@ -15,17 +15,6 @@ const TEMP_DIR = path.join(SCRIPT_DIR, '../.tmp-detailed-analysis');
 const OUTPUT_FILE = path.join(SCRIPT_DIR, '../doc/detailed-analysis-level15.md');
 
 /**
- * Generate test file to measure compile time
- */
-function generateTestFile(lockLevel, testName, code) {
-  const sequence = Array.from({ length: lockLevel }, (_, i) => i + 1).join(', ');
-  
-  const baseImports = `import type { LockContext, OrderedSubsequences, AllPrefixes } from '../src/core';\n\n`;
-  
-  return baseImports + code.replace(/\{sequence\}/g, sequence);
-}
-
-/**
  * Measure compilation time with detailed output
  */
 function measureCompileTimeDetailed(filePath, description) {
@@ -61,7 +50,7 @@ function measureCompileTimeDetailed(filePath, description) {
 }
 
 /**
- * Test scenarios
+ * Test scenarios - all include actual lock acquisition and function calls
  */
 const scenarios = [
   {
@@ -74,61 +63,201 @@ const scenarios = [
   },
   {
     name: 'OrderedSubsequences with Single Function',
-    code: `
-type TestType = OrderedSubsequences<readonly [{sequence}]>;
+    generateCode: (lockLevel) => {
+      const sequence = Array.from({ length: lockLevel }, (_, i) => i + 1).join(', ');
+      const nextLock = lockLevel + 1;
+      return `
+import { createLockContext } from '../src/core';
+import type { LockContext, OrderedSubsequences } from '../src/core';
+type TestType = OrderedSubsequences<readonly [${sequence}]>;
 async function testFunction(context: LockContext<TestType>): Promise<void> {
-  console.log(context.toString());
+  const nextCtx = await context.acquireRead(${nextLock});
+  console.log(nextCtx.toString());
+  nextCtx.dispose();
 }
-export { testFunction };`
+async function runTest() {
+  const ctx = createLockContext();
+  await testFunction(ctx);
+  ctx.dispose();
+}
+export { testFunction, runTest };`;
+    }
   },
   {
     name: 'AllPrefixes with Single Function',
-    code: `
-type TestType = AllPrefixes<readonly [{sequence}]>;
+    generateCode: (lockLevel) => {
+      const sequence = Array.from({ length: lockLevel }, (_, i) => i + 1).join(', ');
+      const nextLock = lockLevel + 1;
+      return `
+import { createLockContext } from '../src/core';
+import type { LockContext, AllPrefixes } from '../src/core';
+type TestType = AllPrefixes<readonly [${sequence}]>;
 async function testFunction(context: LockContext<TestType>): Promise<void> {
-  console.log(context.toString());
+  const nextCtx = await context.acquireRead(${nextLock});
+  console.log(nextCtx.toString());
+  nextCtx.dispose();
 }
-export { testFunction };`
+async function runTest() {
+  const ctx = createLockContext();
+  await testFunction(ctx);
+  ctx.dispose();
+}
+export { testFunction, runTest };`;
+    }
   },
   {
     name: 'OrderedSubsequences with 3 Functions',
-    code: `
-type TestType = OrderedSubsequences<readonly [{sequence}]>;
-async function fn1(ctx: LockContext<TestType>): Promise<void> { console.log(ctx); }
-async function fn2(ctx: LockContext<TestType>): Promise<void> { await fn1(ctx); }
-async function fn3(ctx: LockContext<TestType>): Promise<void> { await fn2(ctx); }
-export { fn1, fn2, fn3 };`
+    generateCode: (lockLevel) => {
+      const sequence = Array.from({ length: lockLevel }, (_, i) => i + 1).join(', ');
+      const nextLock = lockLevel + 1;
+      const nextLock2 = lockLevel + 2;
+      return `
+import { createLockContext } from '../src/core';
+import type { LockContext, OrderedSubsequences } from '../src/core';
+type TestType = OrderedSubsequences<readonly [${sequence}]>;
+async function fn1(ctx: LockContext<TestType>): Promise<void> {
+  const next = await ctx.acquireRead(${nextLock});
+  console.log(next);
+  next.dispose();
+}
+async function fn2(ctx: LockContext<TestType>): Promise<void> {
+  const next = await ctx.acquireWrite(${nextLock});
+  await fn1(next);
+  next.dispose();
+}
+async function fn3(ctx: LockContext<TestType>): Promise<void> {
+  const next = await ctx.acquireRead(${nextLock2});
+  await fn2(ctx);
+  next.dispose();
+}
+async function runTest() {
+  const ctx = createLockContext();
+  await fn3(ctx);
+  ctx.dispose();
+}
+export { fn1, fn2, fn3, runTest };`;
+    }
   },
   {
     name: 'AllPrefixes with 3 Functions',
-    code: `
-type TestType = AllPrefixes<readonly [{sequence}]>;
-async function fn1(ctx: LockContext<TestType>): Promise<void> { console.log(ctx); }
-async function fn2(ctx: LockContext<TestType>): Promise<void> { await fn1(ctx); }
-async function fn3(ctx: LockContext<TestType>): Promise<void> { await fn2(ctx); }
-export { fn1, fn2, fn3 };`
+    generateCode: (lockLevel) => {
+      const sequence = Array.from({ length: lockLevel }, (_, i) => i + 1).join(', ');
+      const nextLock = lockLevel + 1;
+      const nextLock2 = lockLevel + 2;
+      return `
+import { createLockContext } from '../src/core';
+import type { LockContext, AllPrefixes } from '../src/core';
+type TestType = AllPrefixes<readonly [${sequence}]>;
+async function fn1(ctx: LockContext<TestType>): Promise<void> {
+  const next = await ctx.acquireRead(${nextLock});
+  console.log(next);
+  next.dispose();
+}
+async function fn2(ctx: LockContext<TestType>): Promise<void> {
+  const next = await ctx.acquireWrite(${nextLock});
+  await fn1(next);
+  next.dispose();
+}
+async function fn3(ctx: LockContext<TestType>): Promise<void> {
+  const next = await ctx.acquireRead(${nextLock2});
+  await fn2(ctx);
+  next.dispose();
+}
+async function runTest() {
+  const ctx = createLockContext();
+  await fn3(ctx);
+  ctx.dispose();
+}
+export { fn1, fn2, fn3, runTest };`;
+    }
   },
   {
     name: 'OrderedSubsequences with 5 Functions',
-    code: `
-type TestType = OrderedSubsequences<readonly [{sequence}]>;
-async function fn1(ctx: LockContext<TestType>): Promise<void> { console.log(ctx); }
-async function fn2(ctx: LockContext<TestType>): Promise<void> { await fn1(ctx); }
-async function fn3(ctx: LockContext<TestType>): Promise<void> { await fn2(ctx); }
-async function fn4(ctx: LockContext<TestType>): Promise<void> { await fn3(ctx); }
-async function fn5(ctx: LockContext<TestType>): Promise<void> { await fn4(ctx); }
-export { fn1, fn2, fn3, fn4, fn5 };`
+    generateCode: (lockLevel) => {
+      const sequence = Array.from({ length: lockLevel }, (_, i) => i + 1).join(', ');
+      const nextLock = lockLevel + 1;
+      const nextLock2 = lockLevel + 2;
+      const nextLock3 = lockLevel + 3;
+      return `
+import { createLockContext } from '../src/core';
+import type { LockContext, OrderedSubsequences } from '../src/core';
+type TestType = OrderedSubsequences<readonly [${sequence}]>;
+async function fn1(ctx: LockContext<TestType>): Promise<void> {
+  const next = await ctx.acquireRead(${nextLock});
+  console.log(next);
+  next.dispose();
+}
+async function fn2(ctx: LockContext<TestType>): Promise<void> {
+  const next = await ctx.acquireWrite(${nextLock});
+  await fn1(next);
+  next.dispose();
+}
+async function fn3(ctx: LockContext<TestType>): Promise<void> {
+  const next = await ctx.acquireRead(${nextLock2});
+  await fn2(next);
+  next.dispose();
+}
+async function fn4(ctx: LockContext<TestType>): Promise<void> {
+  const next = await ctx.acquireWrite(${nextLock2});
+  await fn3(next);
+  next.dispose();
+}
+async function fn5(ctx: LockContext<TestType>): Promise<void> {
+  const next = await ctx.acquireRead(${nextLock3});
+  await fn4(ctx);
+  next.dispose();
+}
+async function runTest() {
+  const ctx = createLockContext();
+  await fn5(ctx);
+  ctx.dispose();
+}
+export { fn1, fn2, fn3, fn4, fn5, runTest };`;
+    }
   },
   {
     name: 'AllPrefixes with 5 Functions',
-    code: `
-type TestType = AllPrefixes<readonly [{sequence}]>;
-async function fn1(ctx: LockContext<TestType>): Promise<void> { console.log(ctx); }
-async function fn2(ctx: LockContext<TestType>): Promise<void> { await fn1(ctx); }
-async function fn3(ctx: LockContext<TestType>): Promise<void> { await fn2(ctx); }
-async function fn4(ctx: LockContext<TestType>): Promise<void> { await fn3(ctx); }
-async function fn5(ctx: LockContext<TestType>): Promise<void> { await fn4(ctx); }
-export { fn1, fn2, fn3, fn4, fn5 };`
+    generateCode: (lockLevel) => {
+      const sequence = Array.from({ length: lockLevel }, (_, i) => i + 1).join(', ');
+      const nextLock = lockLevel + 1;
+      const nextLock2 = lockLevel + 2;
+      const nextLock3 = lockLevel + 3;
+      return `
+import { createLockContext } from '../src/core';
+import type { LockContext, AllPrefixes } from '../src/core';
+type TestType = AllPrefixes<readonly [${sequence}]>;
+async function fn1(ctx: LockContext<TestType>): Promise<void> {
+  const next = await ctx.acquireRead(${nextLock});
+  console.log(next);
+  next.dispose();
+}
+async function fn2(ctx: LockContext<TestType>): Promise<void> {
+  const next = await ctx.acquireWrite(${nextLock});
+  await fn1(next);
+  next.dispose();
+}
+async function fn3(ctx: LockContext<TestType>): Promise<void> {
+  const next = await ctx.acquireRead(${nextLock2});
+  await fn2(next);
+  next.dispose();
+}
+async function fn4(ctx: LockContext<TestType>): Promise<void> {
+  const next = await ctx.acquireWrite(${nextLock2});
+  await fn3(next);
+  next.dispose();
+}
+async function fn5(ctx: LockContext<TestType>): Promise<void> {
+  const next = await ctx.acquireRead(${nextLock3});
+  await fn4(ctx);
+  next.dispose();
+}
+async function runTest() {
+  const ctx = createLockContext();
+  await fn5(ctx);
+  ctx.dispose();
+}
+export { fn1, fn2, fn3, fn4, fn5, runTest };`;
+    }
   }
 ];
 
@@ -153,7 +282,16 @@ async function runDetailedAnalysis() {
     
     for (const scenario of scenarios) {
       const testFile = path.join(TEMP_DIR, `test-level${level}-${scenario.name.replace(/\s+/g, '-').toLowerCase()}.ts`);
-      const code = generateTestFile(level, scenario.name, scenario.code);
+      
+      // Generate code based on scenario type
+      let code;
+      if (scenario.generateCode) {
+        code = scenario.generateCode(level);
+      } else {
+        const sequence = Array.from({ length: level }, (_, i) => i + 1).join(', ');
+        code = scenario.code.replace(/\{sequence\}/g, sequence);
+      }
+      
       fs.writeFileSync(testFile, code);
       
       const result = measureCompileTimeDetailed(testFile, scenario.name);
@@ -231,9 +369,64 @@ async function runDetailedAnalysis() {
   report.push('## Key Findings\n');
   report.push('1. **Type Definition Computation**: The type definition itself compiles quickly');
   report.push('2. **Function Usage Overhead**: Using the type in function parameters significantly increases compile time');
-  report.push('3. **Lock Level 15**: Shows notable performance degradation with function usage');
-  report.push('4. **OrderedSubsequences vs AllPrefixes**: Compare which is more efficient for your use case');
-  report.push('5. **Scaling**: Performance impact scales with both lock level AND number of function usages\n');
+  report.push('3. **Lock Acquisition Impact**: Acquiring locks inside functions adds type-checking complexity');
+  report.push('4. **Lock Level 15**: Shows notable performance degradation with function usage');
+  report.push('5. **OrderedSubsequences vs AllPrefixes**: Compare which is more efficient for your use case');
+  report.push('6. **Scaling**: Performance impact scales with both lock level AND number of function usages\n');
+  
+  // Add explanation of Level 15 behavior
+  report.push('## Understanding the Level 15 Phenomenon\n');
+  
+  const level14 = results.find(r => r.level === 14);
+  const level15 = results.find(r => r.level === 15);
+  const level16 = results.find(r => r.level === 16);
+  
+  if (level14 && level15 && level16) {
+    const ord14 = level14.scenarios['OrderedSubsequences with Single Function'];
+    const ord15 = level15.scenarios['OrderedSubsequences with Single Function'];
+    const ord16 = level16.scenarios['OrderedSubsequences with Single Function'];
+    
+    if (ord14 && ord15 && ord16 && ord14.avg !== -1 && ord15.avg !== -1 && ord16.avg !== -1) {
+      report.push('### Performance Pattern Analysis\n');
+      report.push(`- **Level 14**: ${ord14.avg.toFixed(0)}ms (2^14 = 16,384 combinations)`);
+      report.push(`- **Level 15**: ${ord15.avg.toFixed(0)}ms (2^15 = 32,768 combinations) - **${((ord15.avg / ord14.avg - 1) * 100).toFixed(0)}% increase**`);
+      report.push(`- **Level 16**: ${ord16.avg.toFixed(0)}ms (2^16 = 65,536 combinations) - **${((ord16.avg / ord15.avg - 1) * 100).toFixed(0)}% change**\n`);
+      
+      const jumpRatio = ord15.avg / ord14.avg;
+      const recoveryRatio = ord16.avg / ord15.avg;
+      
+      report.push('### Hypothesis: TypeScript Optimization Threshold\n');
+      report.push(`The ${jumpRatio.toFixed(2)}x jump at level 15 suggests TypeScript crosses an internal threshold:`);
+      report.push('');
+      report.push('**Possible Explanations:**');
+      report.push('1. **Union Size Threshold**: TypeScript may use different algorithms for unions smaller/larger than ~30K members');
+      report.push('2. **Type Caching Strategy**: The type cache might handle 16K vs 32K combinations differently');
+      report.push('3. **Structural Type Checking**: With 32,768 combinations, structural compatibility checks become expensive');
+      report.push('4. **Memory Pressure**: Larger type unions may trigger garbage collection or memory reallocation');
+      report.push('');
+      
+      if (recoveryRatio < 1) {
+        report.push(`**Recovery at Level 16**: The ${recoveryRatio.toFixed(2)}x improvement suggests:`);
+        report.push('- TypeScript switches to a more efficient algorithm for very large unions (>30K combinations)');
+        report.push('- Possibly moves from exhaustive checking to heuristic/sampling approaches');
+        report.push('- Or uses different caching/memoization strategies for massive unions\n');
+      } else {
+        report.push(`**Continued Degradation at Level 16**: The ${recoveryRatio.toFixed(2)}x change suggests:`);
+        report.push('- The performance hit may be consistent above the threshold');
+        report.push('- Each doubling of combinations adds proportional overhead');
+        report.push('- TypeScript may not have special optimizations for very large unions\n');
+      }
+      
+      report.push('### Impact of Lock Acquisition\n');
+      report.push('With lock acquisition inside functions, TypeScript must:');
+      report.push('1. Type-check the input context against all possible combinations');
+      report.push('2. Type-check the `acquireRead`/`acquireWrite` call validity');
+      report.push('3. Compute the resulting context type (adding lock to union)');
+      report.push('4. Verify the new context satisfies function parameter types');
+      report.push('');
+      report.push('At 32,768 input combinations × type operations = exponential complexity spike.\n');
+    }
+  }
   
   report.push('## Recommendations\n');
   report.push('1. **Prefer AllPrefixes** when lock skipping is not needed (typically faster)');
