@@ -280,6 +280,11 @@ type AllLessThan<
  * 
  * Note: This complements but doesn't replace CanAcquire. Use this when you want
  * a generic constraint, and CanAcquire will still validate the detailed ordering.
+ * 
+ * LIMITATION: Due to how TypeScript handles conditional types in generic contexts,
+ * using this type alone as a parameter constraint doesn't guarantee that acquireWrite/Read
+ * will work for all possible THeldLocks values. For complete type safety, use the
+ * CanAcquire<T, X> pattern directly (see ensureLock3CanBeAcquired example).
  */
 type LockContextBelow<
   MaxLevel extends LockLevel,
@@ -298,16 +303,23 @@ type LockContextBelow<
 /**
  * Example function using LockContextBelow approach
  * Accepts any lock context where all held locks are < 3
- * The type system in acquireWrite will still enforce detailed ordering!
+ * 
+ * BEST PRACTICE: For complete type safety, use CanAcquire<T, X> pattern directly:
+ *   context: CanAcquire<T, 3> extends true ? LockContext<T> : never
+ * 
+ * This example demonstrates the simpler LockContextBelow syntax for documentation,
+ * but note that it relies on mathematical properties (all locks < 3 → can acquire 3)
+ * rather than explicit TypeScript validation within the generic function body.
  */
 async function wantsToTakeLock3<
   THeldLocks extends readonly LockLevel[]
 >(
   context: LockContextBelow<3, THeldLocks>
 ): Promise<string> {
-  // The type system in acquireWrite will enforce this!
-  // If THeldLocks contains any lock >= 3, acquireWrite(LOCK_3) won't compile
-  const lock3Ctx = await context.acquireWrite(LOCK_2);
+  // Acquire LOCK_3 - mathematically guaranteed to work because all held locks < 3
+  // TypeScript may not fully validate this inside the generic function,
+  // but the LockContextBelow constraint at the call site prevents invalid inputs
+  const lock3Ctx = await context.acquireWrite(LOCK_3);
   
   const result = `✅ Acquired LOCK_3 from ${context.toString()}. Now holding: ${lock3Ctx.toString()}`;
   console.log(`   ${result}`);
@@ -587,10 +599,10 @@ export async function runContextTransferDemo(): Promise<void> {
   console.log('');
   console.log('6. LockContextBelow<MaxLevel> + AllLessThan');
   console.log('   → Boundary validation: All held locks must be strictly < MaxLevel');
-  console.log('   → Use when: Function wants to acquire a specific lock and needs validation');
-  console.log('   → Generic approach: Accept any context, validate at type boundary');
-  console.log('   → Complements CanAcquire - acquireWrite/Read will still enforce ordering');
-  console.log('   → Trade-off: Less specific than CanAcquire, relies on dual validation');
+  console.log('   → Use when: Need readable constraint for boundary checking');
+  console.log('   → Limitation: TypeScript may not fully validate acquisitions in generic context');
+  console.log('   → For complete type safety, prefer CanAcquire<T, X> pattern directly');
+  console.log('   → Complements CanAcquire - validates at call site, not inside function body');
   console.log('');
   console.log('💡 Best Practice: Use ValidLockXContext for most function parameters!');
   console.log('💡 Use CanAcquire<T, X> for fresh context pattern (no casts required)!');
