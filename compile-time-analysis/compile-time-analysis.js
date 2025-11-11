@@ -30,18 +30,22 @@ const REPORT_FILE = path.join(SCRIPT_DIR, 'analysis-report.md');
  * @returns {string}
  */
 function generateTypeDefinitionFile(lockLevel) {
-  const sequence = Array.from({ length: lockLevel }, (_, i) => i + 1).join(', ');
-  
-  return `
-import type { LockContext, OrderedSubsequences, AllPrefixes } from '../src/core';
+  // Generate definitions for ALL levels 1..lockLevel in the same file
+  let parts = [];
+  parts.push("import type { LockContext, OrderedSubsequences, AllPrefixes } from '../src/core';\n");
 
-// Type definition covering all lock levels from 1 to ${lockLevel}
-type TestOrderedSubsequences = OrderedSubsequences<readonly [${sequence}]>;
-type TestAllPrefixes = AllPrefixes<readonly [${sequence}]>;
+  for (let k = 1; k <= lockLevel; k++) {
+    const seq = Array.from({ length: k }, (_, i) => i + 1).join(', ');
+    parts.push(`// Level ${k}\n`);
+    parts.push(`type TestOrderedSubsequences_${k} = OrderedSubsequences<readonly [${seq}]>;\n`);
+    parts.push(`type TestAllPrefixes_${k} = AllPrefixes<readonly [${seq}]>;\n\n`);
+  }
 
-// Export to prevent tree-shaking
-export type { TestOrderedSubsequences, TestAllPrefixes };
-`;
+  // Export all to avoid tree-shaking
+  parts.push('// Export types to ensure full type-checking across levels\n');
+  parts.push('export type { ' + Array.from({ length: lockLevel }, (_, i) => `TestOrderedSubsequences_${i+1}, TestAllPrefixes_${i+1}`).join(', ') + ' };\n');
+
+  return parts.join('');
 }
 
 /**
@@ -51,38 +55,35 @@ export type { TestOrderedSubsequences, TestAllPrefixes };
  * @returns {string}
  */
 function generateFunctionUsageFile(lockLevel) {
-  const sequence = Array.from({ length: lockLevel }, (_, i) => i + 1).join(', ');
-  // For acquiring a lock inside, use the next level after lockLevel
-  const nextLock = lockLevel + 1;
-  
-  return `
-import { createLockContext } from '../src/core';
-import type { LockContext, OrderedSubsequences, AllPrefixes } from '../src/core';
+  // Generate multiple function usages for all levels 1..lockLevel inside same file
+  let parts = [];
+  parts.push("import { createLockContext } from '../src/core';\nimport type { LockContext, OrderedSubsequences, AllPrefixes } from '../src/core';\n\n");
 
-type TestOrderedSubsequences = OrderedSubsequences<readonly [${sequence}]>;
-type TestAllPrefixes = AllPrefixes<readonly [${sequence}]>;
+  for (let k = 1; k <= lockLevel; k++) {
+    const seq = Array.from({ length: k }, (_, i) => i + 1).join(', ');
+    const nextLock = k + 1;
+    parts.push(`// Level ${k}\n`);
+    parts.push(`type TestOrderedSubsequences_${k} = OrderedSubsequences<readonly [${seq}]>;\n`);
+    parts.push(`type TestAllPrefixes_${k} = AllPrefixes<readonly [${seq}]>;\n\n`);
 
-// Function using the type and acquiring an additional lock
-async function testFunction(
-  context: LockContext<TestOrderedSubsequences>
-): Promise<void> {
-  // Acquire another lock inside the function to test impact on compile time
-  const nextContext = await context.acquireRead(${nextLock});
-  console.log(nextContext.toString());
-  nextContext.dispose();
-}
+    parts.push(`async function testFunction_${k}(context: LockContext<TestOrderedSubsequences_${k}>): Promise<void> {\n`);
+    parts.push(`  const nextContext = await context.acquireRead(${nextLock});\n`);
+    parts.push(`  console.log(nextContext.toString());\n`);
+    parts.push(`  nextContext.dispose();\n`);
+    parts.push(`}\n\n`);
+  }
 
-// Actually call the function to ensure TypeScript fully type-checks it
-async function runTest() {
-  const ctx = createLockContext();
-  await testFunction(ctx);
-  ctx.dispose();
-}
+  // runTest calls each generated function to force type-checking
+  parts.push('async function runTest() {\n  const ctx = createLockContext();\n');
+  for (let k = 1; k <= lockLevel; k++) {
+    parts.push(`  await testFunction_${k}(ctx as any);\n`);
+  }
+  parts.push('  ctx.dispose();\n}\n\n');
 
-// Export to prevent tree-shaking
-export { testFunction, runTest };
-export type { TestOrderedSubsequences, TestAllPrefixes };
-`;
+  parts.push('export { ' + Array.from({ length: lockLevel }, (_, i) => `testFunction_${i+1}`).join(', ') + ', runTest };\n');
+  parts.push('export type { ' + Array.from({ length: lockLevel }, (_, i) => `TestOrderedSubsequences_${i+1}, TestAllPrefixes_${i+1}`).join(', ') + ' };\n');
+
+  return parts.join('');
 }
 
 /**
@@ -92,77 +93,48 @@ export type { TestOrderedSubsequences, TestAllPrefixes };
  * @returns {string}
  */
 function generateMultipleFunctionsFile(lockLevel) {
-  const sequence = Array.from({ length: lockLevel }, (_, i) => i + 1).join(', ');
-  const nextLock = lockLevel + 1;
-  const nextLock2 = lockLevel + 2;
-  const nextLock3 = lockLevel + 3;
-  
-  return `
-import { createLockContext } from '../src/core';
-import type { LockContext, OrderedSubsequences, AllPrefixes } from '../src/core';
+  // Generate a dense file that creates many interdependent functions across all levels
+  let parts = [];
+  parts.push("import { createLockContext } from '../src/core';\nimport type { LockContext, OrderedSubsequences, AllPrefixes } from '../src/core';\n\n");
 
-type TestOrderedSubsequences = OrderedSubsequences<readonly [${sequence}]>;
-type TestAllPrefixes = AllPrefixes<readonly [${sequence}]>;
+  for (let k = 1; k <= lockLevel; k++) {
+    const seq = Array.from({ length: k }, (_, i) => i + 1).join(', ');
+    const nextLock = k + 1;
+    const nextLock2 = k + 2;
+    const nextLock3 = k + 3;
 
-// Multiple functions using the type, each acquiring an additional lock
-async function testFunction1(
-  context: LockContext<TestOrderedSubsequences>
-): Promise<void> {
-  const nextCtx = await context.acquireRead(${nextLock});
-  console.log(nextCtx.toString());
-  nextCtx.dispose();
-}
+    parts.push(`// Level ${k}\n`);
+    parts.push(`type TestOrderedSubsequences_${k} = OrderedSubsequences<readonly [${seq}]>;\n`);
+    parts.push(`type TestAllPrefixes_${k} = AllPrefixes<readonly [${seq}]>;\n\n`);
 
-async function testFunction2(
-  context: LockContext<TestAllPrefixes>
-): Promise<void> {
-  const nextCtx = await context.acquireWrite(${nextLock});
-  console.log(nextCtx.toString());
-  nextCtx.dispose();
-}
+    parts.push(`async function testFunction1_${k}(context: LockContext<TestOrderedSubsequences_${k}>): Promise<void> {\n`);
+    parts.push(`  const nextCtx = await context.acquireRead(${nextLock});\n  console.log(nextCtx.toString());\n  nextCtx.dispose();\n}\n\n`);
 
-async function testFunction3(
-  context: LockContext<TestOrderedSubsequences>
-): Promise<void> {
-  const nextCtx = await context.acquireRead(${nextLock2});
-  await testFunction1(nextCtx);
-  nextCtx.dispose();
-}
+    parts.push(`async function testFunction2_${k}(context: LockContext<TestAllPrefixes_${k}>): Promise<void> {\n`);
+    parts.push(`  const nextCtx = await context.acquireWrite(${nextLock});\n  console.log(nextCtx.toString());\n  nextCtx.dispose();\n}\n\n`);
 
-async function testFunction4(
-  context: LockContext<TestAllPrefixes>
-): Promise<void> {
-  const nextCtx = await context.acquireWrite(${nextLock2});
-  await testFunction2(nextCtx);
-  nextCtx.dispose();
-}
+    parts.push(`async function testFunction3_${k}(context: LockContext<TestOrderedSubsequences_${k}>): Promise<void> {\n`);
+    parts.push(`  const nextCtx = await context.acquireRead(${nextLock2});\n  await testFunction1_${k}(nextCtx as any);\n  nextCtx.dispose();\n}\n\n`);
 
-async function testFunction5(
-  ctx1: LockContext<TestOrderedSubsequences>,
-  ctx2: LockContext<TestAllPrefixes>
-): Promise<void> {
-  const next1 = await ctx1.acquireRead(${nextLock3});
-  const next2 = await ctx2.acquireWrite(${nextLock3});
-  console.log(next1.toString(), next2.toString());
-  next1.dispose();
-  next2.dispose();
-}
+    parts.push(`async function testFunction4_${k}(context: LockContext<TestAllPrefixes_${k}>): Promise<void> {\n`);
+    parts.push(`  const nextCtx = await context.acquireWrite(${nextLock2});\n  await testFunction2_${k}(nextCtx as any);\n  nextCtx.dispose();\n}\n\n`);
 
-// Actually call the functions to ensure full type-checking
-async function runAllTests() {
-  const ctx = createLockContext();
-  await testFunction1(ctx);
-  await testFunction2(ctx);
-  await testFunction3(ctx);
-  await testFunction4(ctx);
-  await testFunction5(ctx, ctx);
-  ctx.dispose();
-}
+    parts.push(`async function testFunction5_${k}(ctx1: LockContext<TestOrderedSubsequences_${k}>, ctx2: LockContext<TestAllPrefixes_${k}>): Promise<void> {\n`);
+    parts.push(`  const next1 = await ctx1.acquireRead(${nextLock3});\n  const next2 = await ctx2.acquireWrite(${nextLock3});\n  console.log(next1.toString(), next2.toString());\n  next1.dispose();\n  next2.dispose();\n}\n\n`);
+  }
 
-// Export to prevent tree-shaking
-export { testFunction1, testFunction2, testFunction3, testFunction4, testFunction5, runAllTests };
-export type { TestOrderedSubsequences, TestAllPrefixes };
-`;
+  // runAllTests to call a few functions per level
+  parts.push('async function runAllTests() {\n  const ctx = createLockContext();\n');
+  for (let k = 1; k <= lockLevel; k++) {
+    parts.push(`  await testFunction1_${k}(ctx as any);\n`);
+    parts.push(`  await testFunction2_${k}(ctx as any);\n`);
+  }
+  parts.push('  ctx.dispose();\n}\n\n');
+
+  parts.push('export { runAllTests };\n');
+  parts.push('export type { ' + Array.from({ length: lockLevel }, (_, i) => `TestOrderedSubsequences_${i+1}, TestAllPrefixes_${i+1}`).join(', ') + ' };\n');
+
+  return parts.join('');
 }
 
 /**
@@ -408,8 +380,11 @@ async function runAnalysis() {
   
   const results = [];
   
-  // Test lock levels from 1 to 20 (or until timeout)
-  const lockLevels = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
+  // Test lock levels from 1 to MAX_LEVEL (or until timeout)
+  // You can override via environment variable MAX_LEVEL (e.g., MAX_LEVEL=12)
+  const maxLevelEnv = parseInt(process.env.MAX_LEVEL || '', 10);
+  const maxLevel = Number.isFinite(maxLevelEnv) && maxLevelEnv > 0 ? maxLevelEnv : 12;
+  const lockLevels = Array.from({ length: maxLevel }, (_, i) => i + 1);
   
   for (const level of lockLevels) {
     const result = analyzeLockLevel(level);
