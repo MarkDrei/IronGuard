@@ -318,8 +318,8 @@ type CanAcquire<THeld extends readonly LockLevel[], TLock extends LockLevel> =
  * @template T - The tuple to generate ordered subsequences from (typically SUPPORTED_LOCK_LEVELS)
  * @see {@link doc/flexible-lock-types.md} for detailed usage guide and performance analysis
  */
-type OrderedSubsequences<T extends readonly unknown[]> =
-  T extends readonly [infer First, ...infer Rest]
+type OrderedSubsequences<T extends readonly number[]> =
+  T extends readonly [infer First, ...infer Rest extends readonly number[]]
     ? OrderedSubsequences<Rest> | readonly [First, ...OrderedSubsequences<Rest>]
     : readonly [];
 

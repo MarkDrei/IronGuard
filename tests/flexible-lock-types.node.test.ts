@@ -17,9 +17,10 @@ import {
   LOCK_2,
   LOCK_3,
   LOCK_4,
-  LOCK_5
+  LOCK_5,
+  type LocksAtMost3,
+  type LocksAtMost5
 } from '../src/core';
-import type { LocksAtMost3, LocksAtMost5 } from '../src';
 
 describe('LocksAtMost3 Type', () => {
   test('should accept empty context', async () => {

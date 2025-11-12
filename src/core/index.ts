@@ -31,7 +31,17 @@ export type {
   LockLevel,
   Contains,
   CanAcquire,
-  PrefixUpTo
+  PrefixUpTo,
+  OrderedSubsequences,
+  LocksAtMost1,
+  LocksAtMost2,
+  LocksAtMost3,
+  LocksAtMost4,
+  LocksAtMost5,
+  LocksAtMost6,
+  LocksAtMost7,
+  LocksAtMost8,
+  LocksAtMost9
 } from './ironGuardSystem';
 
 // Advanced constraint types
