@@ -241,6 +241,76 @@ async function test() {
   const invalid = await ctx9.acquireWrite(LOCK_4); // Should fail: 9 → 4
 }
 `
+  },
+  // LocksAtMost flexible types - invalid patterns
+  {
+    name: 'LocksAtMost5: Cannot acquire lock within range',
+    code: `
+import { createLockContext, LOCK_3, type LockContext, type LocksAtMost5 } from 'src/core';
+async function processWithFlexibleContext(ctx: LockContext<LocksAtMost5>): Promise<void> {
+  const invalid = await ctx.acquireWrite(LOCK_3); // Should fail: might already hold LOCK_3
+}
+`
+  },
+  {
+    name: 'LocksAtMost3: Cannot acquire LOCK_1',
+    code: `
+import { createLockContext, LOCK_1, type LockContext, type LocksAtMost3 } from 'src/core';
+async function plugin(ctx: LockContext<LocksAtMost3>): Promise<void> {
+  const invalid = await ctx.acquireWrite(LOCK_1); // Should fail: might already hold LOCK_1
+}
+`
+  },
+  {
+    name: 'LocksAtMost4: Cannot acquire LOCK_2',
+    code: `
+import { createLockContext, LOCK_2, type LockContext, type LocksAtMost4 } from 'src/core';
+async function middleware(ctx: LockContext<LocksAtMost4>): Promise<void> {
+  const invalid = await ctx.acquireWrite(LOCK_2); // Should fail: might already hold LOCK_2
+}
+`
+  },
+  {
+    name: 'LocksAtMost5: Cannot acquire LOCK_5',
+    code: `
+import { createLockContext, LOCK_5, type LockContext, type LocksAtMost5 } from 'src/core';
+async function handler(ctx: LockContext<LocksAtMost5>): Promise<void> {
+  const invalid = await ctx.acquireWrite(LOCK_5); // Should fail: might already hold LOCK_5
+}
+`
+  },
+  {
+    name: 'LocksAtMost3: Context [4] cannot be passed',
+    code: `
+import { createLockContext, LOCK_4, type LockContext, type LocksAtMost3 } from 'src/core';
+async function needsAtMost3(ctx: LockContext<LocksAtMost3>): Promise<void> {}
+async function test() {
+  const ctx4 = await createLockContext().acquireWrite(LOCK_4);
+  await needsAtMost3(ctx4); // Should fail: [4] is not in LocksAtMost3
+}
+`
+  },
+  {
+    name: 'LocksAtMost2: Context [3] cannot be passed',
+    code: `
+import { createLockContext, LOCK_3, type LockContext, type LocksAtMost2 } from 'src/core';
+async function needsAtMost2(ctx: LockContext<LocksAtMost2>): Promise<void> {}
+async function test() {
+  const ctx3 = await createLockContext().acquireWrite(LOCK_3);
+  await needsAtMost2(ctx3); // Should fail: [3] is not in LocksAtMost2
+}
+`
+  },
+  {
+    name: 'LocksAtMost4: Context [1,5] cannot be passed',
+    code: `
+import { createLockContext, LOCK_1, LOCK_5, type LockContext, type LocksAtMost4 } from 'src/core';
+async function needsAtMost4(ctx: LockContext<LocksAtMost4>): Promise<void> {}
+async function test() {
+  const ctx15 = await createLockContext().acquireWrite(LOCK_1).then(c => c.acquireWrite(LOCK_5));
+  await needsAtMost4(ctx15); // Should fail: [1,5] has lock 5 which is > 4
+}
+`
   }
 ];
 
@@ -486,6 +556,172 @@ async function test() {
   // Medium skip: 8 direct
   const ctx8 = await createLockContext().acquireWrite(LOCK_8);
   ctx8.dispose();
+}
+`
+  },
+  // LocksAtMost flexible types - valid patterns
+  {
+    name: 'LocksAtMost5: Accept empty context',
+    code: `
+import { createLockContext, type LockContext, type LocksAtMost5 } from 'src/core';
+async function processWithFlexibleContext(ctx: LockContext<LocksAtMost5>): Promise<void> {
+  const locks = ctx.getHeldLocks();
+  console.log(\`Processing with locks: [\${locks}]\`);
+}
+async function test() {
+  const ctx = createLockContext();
+  await processWithFlexibleContext(ctx); // Valid: [] is in LocksAtMost5
+}
+`
+  },
+  {
+    name: 'LocksAtMost5: Accept [4,5] context',
+    code: `
+import { createLockContext, LOCK_4, LOCK_5, type LockContext, type LocksAtMost5 } from 'src/core';
+async function processWithFlexibleContext(ctx: LockContext<LocksAtMost5>): Promise<void> {
+  if (ctx.hasLock(LOCK_4)) {
+    console.log('Has lock 4');
+  }
+}
+async function test() {
+  const ctx0 = createLockContext();
+  const ctx4 = await ctx0.acquireWrite(LOCK_4);
+  const ctx5 = await ctx4.acquireWrite(LOCK_5);
+  await processWithFlexibleContext(ctx5); // Valid: [4,5] is in LocksAtMost5
+  ctx5.dispose();
+}
+`
+  },
+  {
+    name: 'LocksAtMost3: Accept skip pattern [1,3]',
+    code: `
+import { createLockContext, LOCK_1, LOCK_3, type LockContext, type LocksAtMost3 } from 'src/core';
+async function plugin(ctx: LockContext<LocksAtMost3>): Promise<void> {
+  const locks = ctx.getHeldLocks();
+  console.log(\`Plugin with [\${locks}]\`);
+}
+async function test() {
+  const ctx0 = createLockContext();
+  const ctx1 = await ctx0.acquireWrite(LOCK_1);
+  const ctx3 = await ctx1.acquireWrite(LOCK_3);
+  await plugin(ctx3); // Valid: [1,3] is in LocksAtMost3
+  ctx3.dispose();
+}
+`
+  },
+  {
+    name: 'LocksAtMost4: Accept single lock [2]',
+    code: `
+import { createLockContext, LOCK_2, type LockContext, type LocksAtMost4 } from 'src/core';
+async function middleware(ctx: LockContext<LocksAtMost4>): Promise<void> {
+  const locks = ctx.getHeldLocks();
+  return;
+}
+async function test() {
+  const ctx2 = await createLockContext().acquireWrite(LOCK_2);
+  await middleware(ctx2); // Valid: [2] is in LocksAtMost4
+  ctx2.dispose();
+}
+`
+  },
+  {
+    name: 'LocksAtMost5: Can acquire lock 6 and higher',
+    code: `
+import { createLockContext, LOCK_1, LOCK_5, LOCK_6, type LockContext, type LocksAtMost5 } from 'src/core';
+async function processWithFlexibleContext(ctx: LockContext<LocksAtMost5>): Promise<void> {
+  // Valid: can acquire locks ABOVE the LocksAtMost range
+  const ctx6 = await ctx.acquireWrite(LOCK_6);
+  ctx6.dispose();
+}
+async function test() {
+  const ctx15 = await createLockContext().acquireWrite(LOCK_1).then(c => c.acquireWrite(LOCK_5));
+  await processWithFlexibleContext(ctx15);
+  ctx15.dispose();
+}
+`
+  },
+  {
+    name: 'LocksAtMost3: Pass through different states',
+    code: `
+import { createLockContext, LOCK_1, LOCK_2, LOCK_3, type LockContext, type LocksAtMost3 } from 'src/core';
+async function flexibleHandler(ctx: LockContext<LocksAtMost3>): Promise<string> {
+  const locks = ctx.getHeldLocks() as readonly number[];
+  if (locks.length === 0) return 'empty';
+  if (locks.includes(3)) return 'has-3';
+  return 'partial';
+}
+async function test() {
+  // All valid patterns
+  const result1 = await flexibleHandler(createLockContext());
+  
+  const ctx1 = await createLockContext().acquireWrite(LOCK_1);
+  const result2 = await flexibleHandler(ctx1);
+  ctx1.dispose();
+  
+  const ctx23 = await createLockContext().acquireWrite(LOCK_2).then(c => c.acquireWrite(LOCK_3));
+  const result3 = await flexibleHandler(ctx23);
+  ctx23.dispose();
+  
+  const ctx123 = await createLockContext()
+    .acquireWrite(LOCK_1)
+    .then(c => c.acquireWrite(LOCK_2))
+    .then(c => c.acquireWrite(LOCK_3));
+  const result4 = await flexibleHandler(ctx123);
+  ctx123.dispose();
+}
+`
+  },
+  {
+    name: 'LocksAtMost5: Chained context passing',
+    code: `
+import { createLockContext, LOCK_1, LOCK_3, LOCK_5, type LockContext, type LocksAtMost5 } from 'src/core';
+async function stepOne(ctx: LockContext<LocksAtMost5>): Promise<void> {}
+async function stepTwo(ctx: LockContext<LocksAtMost5>): Promise<void> {}
+async function stepThree(ctx: LockContext<LocksAtMost5>): Promise<void> {}
+
+async function test() {
+  const ctx0 = createLockContext();
+  const ctx1 = await ctx0.acquireWrite(LOCK_1);
+  await stepOne(ctx1);
+  
+  const ctx3 = await ctx1.acquireWrite(LOCK_3);
+  await stepTwo(ctx3);
+  
+  const ctx5 = await ctx3.acquireWrite(LOCK_5);
+  await stepThree(ctx5);
+  
+  ctx5.dispose();
+}
+`
+  },
+  {
+    name: 'LocksAtMost types with different levels',
+    code: `
+import { createLockContext, LOCK_1, LOCK_2, LOCK_3, LOCK_4, LOCK_5, 
+         type LockContext, type LocksAtMost3, type LocksAtMost5 } from 'src/core';
+
+async function smallPlugin(ctx: LockContext<LocksAtMost3>): Promise<void> {}
+async function largePlugin(ctx: LockContext<LocksAtMost5>): Promise<void> {}
+
+async function test() {
+  const ctx2 = await createLockContext().acquireWrite(LOCK_2);
+  
+  // Valid: [2] fits in both LocksAtMost3 and LocksAtMost5
+  await smallPlugin(ctx2);
+  await largePlugin(ctx2);
+  
+  const ctx3 = await ctx2.acquireWrite(LOCK_3);
+  
+  // Valid: [2,3] fits in both
+  await smallPlugin(ctx3);
+  await largePlugin(ctx3);
+  
+  const ctx5 = await ctx3.acquireWrite(LOCK_5);
+  
+  // Valid: [2,3,5] only fits in LocksAtMost5
+  await largePlugin(ctx5);
+  
+  ctx5.dispose();
 }
 `
   }

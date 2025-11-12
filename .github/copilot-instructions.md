@@ -31,11 +31,9 @@ This is a TypeScript project that implements compile-time lock order violation d
 
 ## Testing Guidelines
 
-When creating or updating tests, always include compile-time failure examples as commented code:
-
-- **Structure**: Use single-line comments (`//`) for easy uncomment testing
-- **Format**: Organize invalid code in clearly marked blocks with explanatory comments
-- **Purpose**: Allow quick verification that TypeScript correctly prevents invalid operations
+### Runtime Tests (`tests/*.node.test.ts`)
+- Use Node.js test runner with `assert` for assertions
+- Include compile-time failure examples as commented code with `// ❌` markers
 - **Example Pattern**:
   ```typescript
   test('should prevent invalid operations via compile-time', async () => {
@@ -50,5 +48,12 @@ When creating or updating tests, always include compile-time failure examples as
     validNext.dispose();
   });
   ```
-- **Quick Testing**: Remove `//` from commented lines to verify compilation failures
-- **Categories**: Include examples for lock ordering violations, duplicate acquisitions, and invalid usage patterns
+- Structure: Single-line comments for easy uncomment testing
+- Categories: Lock ordering violations, duplicate acquisitions, invalid usage patterns
+
+### Compile-Time Tests (`scripts/test-compile-time.js`)
+- Automated validation that invalid patterns are rejected by TypeScript
+- Add both invalid (should fail) and valid (should pass) test cases
+- Invalid tests verify TypeScript prevents incorrect usage
+- Valid tests ensure the test mechanism itself works correctly
+- Run with: `npm run test:compile`
