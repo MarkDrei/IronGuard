@@ -29,7 +29,7 @@ import { demonstrateRollback } from './rollbackDemo';
 import { demonstrateFeatureCombinations } from './featureCombinationsDemo';
 import { runAllExamples as runReadWriteExamples } from './readWriteExamples';
 import { runContextTransferDemo } from './contextTransferDemo';
-import { demonstrateContextParameter } from './contextParameterDemo';
+import { runFlexibleLockTypesDemo } from './flexibleLockTypesDemo';
 
 async function main(): Promise<void> {
   console.log('�️ IronGuard System\n');
@@ -103,8 +103,8 @@ async function main(): Promise<void> {
   // Context transfer and compile-time validation demo
   await runContextTransferDemo();
   
-  // Context parameter - acquiring locks after receiving context demo
-  await demonstrateContextParameter();
+  // Flexible lock context types demo
+  await runFlexibleLockTypesDemo();
   
   // Composable types system demo
   const { runComposableTypesDemo } = await import('./composableTypesDemo');

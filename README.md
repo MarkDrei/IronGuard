@@ -185,5 +185,6 @@ npm run build
 ## Documentation
 
 - **[Quick Start Guide](doc/quick-start.md)** - Essential features and usage patterns
+- **[Flexible Lock Types Guide](doc/flexible-lock-types.md)** - Guide to OrderedSubsequences and LocksAtMostX
 - **[Read/Write Lock Best Practices](doc/read-write-best-practices.md)** - Concurrent readers and writer preference
 - **[Compile-time Testing Guide](doc/compile-time-testing.md)** - How to validate TypeScript lock safety

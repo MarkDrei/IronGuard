@@ -49,6 +49,21 @@ export type {
   ValidLock15Context
 } from './core/ironGuardTypes';
 
+// Flexible lock context types for function signatures
+export type {
+  OrderedSubsequences,
+  CanAcquire,
+  LocksAtMost1,
+  LocksAtMost2,
+  LocksAtMost3,
+  LocksAtMost4,
+  LocksAtMost5,
+  LocksAtMost6,
+  LocksAtMost7,
+  LocksAtMost8,
+  LocksAtMost9
+} from './core/ironGuardSystem';
+
 // Utility building blocks for advanced usage
 export type {
   HasLock,
