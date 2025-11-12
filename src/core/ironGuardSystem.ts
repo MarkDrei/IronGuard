@@ -280,33 +280,33 @@ type CanAcquire<THeld extends readonly LockLevel[], TLock extends LockLevel> =
 
 /**
  * Generates all ordered subsequences maintaining the original order.
- * 
+ *
  * This recursive type creates a union of all possible ordered subsequences (powerset)
  * from a tuple while preserving the ordering. This is more permissive than AllPrefixes
  * as it allows non-contiguous lock acquisition patterns.
- * 
+ *
  * For example, given [1, 2, 3], it produces:
  * [] | [1] | [2] | [3] | [1, 2] | [1, 3] | [2, 3] | [1, 2, 3]
- * 
+ *
  * This enables flexible lock acquisition patterns where locks can be skipped:
  * - Acquire lock 1, skip lock 2, acquire lock 3 → [1, 3]
  * - Skip lock 1, acquire lock 2 and 3 → [2, 3]
  * - Any ordered combination while maintaining deadlock prevention
- * 
+ *
  * The key property is that order is preserved: if lock A comes before lock B in
  * the original sequence, and both are acquired, then A must be acquired before B.
  * This maintains the hierarchical ordering critical for deadlock prevention.
- * 
+ *
  * Performance: O(2^N) complexity - generates 2^N combinations. Recommended for
  * use with lock levels ≤14 for optimal performance. Level 15 shows 93% overhead
  * increase (~2.2s vs ~1.1s).
- * 
+ *
  * @example
  * ```typescript
  * // For SUPPORTED_LOCK_LEVELS = [1, 2, 3]
  * type ValidLockContextsFlexible = OrderedSubsequences<SUPPORTED_LOCK_LEVELS>;
  * // Produces: [] | [1] | [2] | [3] | [1,2] | [1,3] | [2,3] | [1,2,3]
- * 
+ *
  * // Use in function signatures for maximum flexibility:
  * async function veryFlexibleFunction(
  *   context: LockContext<ValidLockContextsFlexible>
@@ -314,11 +314,11 @@ type CanAcquire<THeld extends readonly LockLevel[], TLock extends LockLevel> =
  *   // Function accepts ANY ordered lock combination
  * }
  * ```
- * 
+ *
  * @template T - The tuple to generate ordered subsequences from (typically SUPPORTED_LOCK_LEVELS)
  * @see {@link doc/flexible-lock-types.md} for detailed usage guide and performance analysis
  */
-type OrderedSubsequences<T extends readonly any[]> =
+type OrderedSubsequences<T extends readonly unknown[]> =
   T extends readonly [infer First, ...infer Rest]
     ? OrderedSubsequences<Rest> | readonly [First, ...OrderedSubsequences<Rest>]
     : readonly [];
@@ -329,26 +329,26 @@ type OrderedSubsequences<T extends readonly any[]> =
 
 /**
  * Pre-defined OrderedSubsequences types for common use cases.
- * 
+ *
  * These types represent lock contexts that may hold any ordered combination
  * of locks up to the specified level. For example, LocksAtMost3 accepts:
  * [], [1], [2], [3], [1,2], [1,3], [2,3], [1,2,3]
- * 
+ *
  * Use these in function parameters to accept flexible lock contexts:
  * ```typescript
  * async function pluginHook(ctx: LockContext<LocksAtMost5>): Promise<void> {
  *   // Accepts any ordered combination of locks 1-5
  * }
  * ```
- * 
+ *
  * Note: Only levels 1-9 are pre-defined for optimal compilation performance.
  * Level 10 generates 1,024 combinations, level 14 generates 16,384 combinations.
- * 
+ *
  * For levels 10 and above, create your own type alias:
  * ```typescript
  * type LocksAtMost10 = OrderedSubsequences<readonly [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]>;
  * ```
- * 
+ *
  * Performance warning: Level 15 has significant compilation overhead (2x compile time).
  * Stay at level 14 or below for best performance.
  */
