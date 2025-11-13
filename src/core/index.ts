@@ -41,7 +41,13 @@ export type {
   LocksAtMost6,
   LocksAtMost7,
   LocksAtMost8,
-  LocksAtMost9
+  LocksAtMost9,
+  NullableLocksAtMost10,
+  NullableLocksAtMost11,
+  NullableLocksAtMost12,
+  NullableLocksAtMost13,
+  NullableLocksAtMost14,
+  NullableLocksAtMost15
 } from './ironGuardSystem';
 
 // Advanced constraint types
@@ -83,5 +89,22 @@ export type {
   ValidLock12Context,
   ValidLock13Context,
   ValidLock14Context,
-  ValidLock15Context
+  ValidLock15Context,
+
+  // HasLock context types
+  HasLock1Context,
+  HasLock2Context,
+  HasLock3Context,
+  HasLock4Context,
+  HasLock5Context,
+  HasLock6Context,
+  HasLock7Context,
+  HasLock8Context,
+  HasLock9Context,
+  HasLock10Context,
+  HasLock11Context,
+  HasLock12Context,
+  HasLock13Context,
+  HasLock14Context,
+  HasLock15Context
 } from './ironGuardTypes';
