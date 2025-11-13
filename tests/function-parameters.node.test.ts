@@ -156,7 +156,7 @@ describe('Compile-time Function Parameter Validation', () => {
       // flexibleLock3Function(ctx35); // Already has LOCK_3, cannot acquire again
     });
 
-    test('should work with different ValidLockXContext patterns', async () => {
+    test('should work with different lock context patterns', async () => {
       // Function accepting contexts that can acquire LOCK_1 (any context)
       function flexibleLock1Function<THeld extends readonly LockLevel[]>(
         context: LockContext<THeld> // Any context can acquire LOCK_1
