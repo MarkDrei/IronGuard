@@ -39,7 +39,7 @@ import {
  */
 async function processUserData<T extends readonly LockLevel[]>(
   context: Contains<T, 2> extends true ? LockContext<T> : never
-): Promise<LockContext<T>> {
+): Promise<LockContext<any>> {
   console.log(`   📊 processUserData() called with: ${context.toString()}`);
   
   const heldLocks = context.getHeldLocks();

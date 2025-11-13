@@ -19,8 +19,7 @@ import {
 
 import {
   functionRequiringLock2,
-  demonstrateLockSkipping,
-  flexibleLock3Function
+  demonstrateLockSkipping
 } from './examples';
 
 import { demonstrateCompileTimeViolations } from './compileTimeViolations';
@@ -105,10 +104,6 @@ async function main(): Promise<void> {
   
   // Flexible lock context types demo
   await runFlexibleLockTypesDemo();
-  
-  // Composable types system demo
-  const { runComposableTypesDemo } = await import('./composableTypesDemo');
-  await runComposableTypesDemo();
   
   console.log('\n=== Key Benefits ===');
   console.log('✓ Runtime mutual exclusion (real thread safety)');
