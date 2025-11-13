@@ -193,7 +193,7 @@ export async function runContextTransferDemo(): Promise<void> {
   console.log('6️⃣ COMPLEX WORKFLOW DEMONSTRATION');
   console.log('Chaining multiple functions with context transfer\n');
   
-  let workflowCtx: any = await createLockContext().acquireRead(LOCK_1);
+  let workflowCtx = await createLockContext().acquireRead(LOCK_1);
   console.log(`   Step 1: ${workflowCtx.toString()}`);
   
   workflowCtx = await workflowCtx.acquireWrite(LOCK_2);
@@ -202,12 +202,13 @@ export async function runContextTransferDemo(): Promise<void> {
   workflowCtx = await workflowCtx.acquireRead(LOCK_3);
   console.log(`   Step 3: ${workflowCtx.toString()}`);
   
-  // Chain function calls with context passing
-  workflowCtx = await processUserData(workflowCtx);
-  workflowCtx = await validateAndSave(workflowCtx);
-  workflowCtx = await performAudit(workflowCtx);
+  // Chain function calls with context passing (explicit casts for workflow)
+  let anyCtx: any = workflowCtx;
+  anyCtx = await processUserData(anyCtx);
+  anyCtx = await validateAndSave(anyCtx);
+  anyCtx = await performAudit(anyCtx);
   
-  workflowCtx.dispose();
+  (anyCtx as LockContext<any>).dispose();
   console.log(`   ✅ Complex workflow with context transfer completed\n`);
 
   // Summary
