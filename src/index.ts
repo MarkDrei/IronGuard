@@ -30,25 +30,6 @@ export {
   LOCK_15
 } from './core/ironGuardSystem';
 
-// All ValidLockContext types for function constraints
-export type {
-  ValidLock1Context,
-  ValidLock2Context,
-  ValidLock3Context,
-  ValidLock4Context,
-  ValidLock5Context,
-  ValidLock6Context,
-  ValidLock7Context,
-  ValidLock8Context,
-  ValidLock9Context,
-  ValidLock10Context,
-  ValidLock11Context,
-  ValidLock12Context,
-  ValidLock13Context,
-  ValidLock14Context,
-  ValidLock15Context
-} from './core/ironGuardTypes';
-
 // Flexible lock context types for function signatures
 export type {
   OrderedSubsequences,

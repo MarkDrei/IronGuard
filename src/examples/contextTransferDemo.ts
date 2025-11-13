@@ -11,7 +11,7 @@
  * - Complex workflow orchestration with chained function calls
  * 
  * Key Features Showcased:
- * - ValidLock2Context<T> type constraint for compile-time safety
+ * - Type constraints for compile-time safety
  * - Runtime lock validation with graceful error handling
  * - Mixed lock acquisition patterns (read + write combinations)
  * - Function parameter constraints that prevent invalid contexts
@@ -30,20 +30,6 @@ import {
 } from '../core';
 
 // =============================================================================
-// TYPE CONSTRAINTS - Compile-time validation for function parameters
-// =============================================================================
-
-/**
- * Type constraint that only allows contexts containing LOCK_2
- * This provides compile-time safety for functions requiring specific locks
- */
-type ValidLock2Context<T> = T extends LockContext<infer Locks>
-  ? Contains<Locks, 2> extends true
-    ? T
-    : "❌ ERROR: processUserData() requires a context containing LOCK_2. Current context does not have LOCK_2."
-  : "❌ ERROR: processUserData() requires a LockContext containing LOCK_2.";
-
-// =============================================================================
 // FUNCTION DEFINITIONS - Context-aware functions with lock requirements
 // =============================================================================
 
@@ -51,15 +37,16 @@ type ValidLock2Context<T> = T extends LockContext<infer Locks>
  * Processes user data - demonstrates compile-time lock validation
  * Only accepts contexts that contain LOCK_2 (enforced at compile time)
  */
-async function processUserData<T extends LockContext<any>>(context: ValidLock2Context<T>): Promise<ValidLock2Context<T>> {
-  const ctx = context as unknown as T;
-  console.log(`   📊 processUserData() called with: ${ctx.toString()}`);
+async function processUserData<T extends readonly LockLevel[]>(
+  context: Contains<T, 2> extends true ? LockContext<T> : never
+): Promise<LockContext<T>> {
+  console.log(`   📊 processUserData() called with: ${context.toString()}`);
   
-  const heldLocks = ctx.getHeldLocks();
+  const heldLocks = context.getHeldLocks();
   console.log(`      Held locks: ${heldLocks.join(', ')}`);
   
   // Type system guarantees LOCK_2 is present, but we can verify for demonstration
-  if (ctx.hasLock(LOCK_2)) {
+  if (context.hasLock(LOCK_2)) {
     console.log(`      ✅ LOCK_2 confirmed - processing user data...`);
     await new Promise(resolve => setTimeout(resolve, 100));
     console.log(`      ✅ User data processed successfully`);

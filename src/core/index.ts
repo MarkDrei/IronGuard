@@ -66,22 +66,5 @@ export type {
   CanAcquireLock12,
   CanAcquireLock13,
   CanAcquireLock14,
-  CanAcquireLock15,
-
-  // Valid context types
-  ValidLock1Context,
-  ValidLock2Context,
-  ValidLock3Context,
-  ValidLock4Context,
-  ValidLock5Context,
-  ValidLock6Context,
-  ValidLock7Context,
-  ValidLock8Context,
-  ValidLock9Context,
-  ValidLock10Context,
-  ValidLock11Context,
-  ValidLock12Context,
-  ValidLock13Context,
-  ValidLock14Context,
-  ValidLock15Context
+  CanAcquireLock15
 } from './ironGuardTypes';
