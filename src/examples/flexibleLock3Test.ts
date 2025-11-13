@@ -38,7 +38,8 @@ async function runDemo(): Promise<void> {
 
   // Test 4: With lock 3 - uses existing lock 3
   const withLock3 = await createLockContext().acquireWrite(LOCK_3);
-  const result4 = await intermediateFunction(withLock3);
+  const withLock34 = await withLock3.acquireWrite(LOCK_4); // chaining to show flexibility
+  const result4 = await intermediateFunction(withLock34);
   result4.dispose();
 
   // ❌ Invalid cases - these cause compile errors
