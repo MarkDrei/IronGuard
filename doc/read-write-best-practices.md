@@ -131,48 +131,6 @@ Time 9: Reader D acquires LOCK_3 ✓ (granted after writer)
 - Use write locks when exclusive access is required
 - Consider lock hierarchies to balance concurrency and safety
 
-## Composable ValidLockContext Types
-
-IronGuard now features a composable type system for function parameter constraints:
-
-### Building Blocks
-```typescript
-// Reusable building blocks for all 15 lock levels
-type HasLock<THeld, Level> = Contains<THeld, Level>;
-type CanAcquireLock3<THeld> = /* hierarchical composition logic */;
-type ValidLock3Context<THeld> = HasLock<THeld, 3> extends true 
-  ? LockContext<THeld> 
-  : CanAcquireLock3<THeld> extends true 
-    ? LockContext<THeld>
-    : 'IronGuard: Cannot acquire lock 3 when holding lock X';
-```
-
-### Function Parameter Patterns
-```typescript
-// Function that works with multiple lock scenarios
-function processData<THeld extends readonly any[]>(
-  ctx: ValidLock3Context<THeld> extends string ? never : ValidLock3Context<THeld>
-): void {
-  // This function accepts contexts that:
-  // - Can acquire LOCK_3 (empty, has LOCK_1, has LOCK_2, etc.)
-  // - Already have LOCK_3 (read or write mode)
-  console.log(`Processing with: ${ctx.toString()}`);
-}
-
-// All these work with both read and write modes:
-const emptyCtx = createLockContext();                    // ✅ Can acquire LOCK_3
-const readCtx = await createLockContext().acquireRead(LOCK_2);   // ✅ Can acquire LOCK_3
-const writeCtx = await createLockContext().acquireWrite(LOCK_3); // ✅ Already has LOCK_3
-
-processData(emptyCtx); processData(readCtx); processData(writeCtx);
-```
-
-### All 15 Lock Levels Supported
-- `ValidLock1Context` through `ValidLock15Context` available
-- Hierarchical composition: `CanAcquireLock5` builds on `CanAcquireLock4`
-- Descriptive error messages for invalid combinations
-- Works seamlessly with both `acquireRead()` and `acquireWrite()`
-
 ## Debugging and Monitoring
 
 ### Enhanced toString() Output

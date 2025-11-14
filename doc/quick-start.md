@@ -117,17 +117,10 @@ Pass lock contexts between functions with compile-time validation:
 ### 1. Type-Safe Function Parameters
 
 ```typescript
-// Type constraint that only allows contexts containing LOCK_2
-type ValidLock2Context<T> = T extends LockContext<infer Locks>
-  ? Contains<Locks, 2> extends true
-    ? T
-    : "❌ ERROR: Function requires a context containing LOCK_2"
-  : never;
-
-// Function that only accepts contexts with LOCK_2
-async function processUserData<T extends LockContext<any>>(
-  context: ValidLock2Context<T>
-): Promise<ValidLock2Context<T>> {
+// Function that only accepts contexts with LOCK_2 using Contains constraint
+async function processUserData<T extends readonly LockLevel[]>(
+  context: Contains<T, 2> extends true ? LockContext<T> : never
+): Promise<LockContext<T>> {
   // TypeScript guarantees LOCK_2 is present - no runtime checks needed
   console.log(`Processing with guaranteed LOCK_2: ${context.toString()}`);
   return context;
@@ -183,68 +176,6 @@ const ctx134 = await ctx13.acquireWrite(LOCK_4);
 const ctx1348 = await ctx134.acquireWrite(LOCK_8);
 
 ctx1348.dispose();
-```
-
-### 2. Composable Function Parameter Constraints
-
-Use the new composable ValidLockContext types for flexible function requirements:
-
-```typescript
-import type { ValidLock3Context, ValidLock5Context } from './src/core';
-
-// Function that requires LOCK_3 (accepts multiple scenarios)
-function processWithLock3<THeld extends readonly any[]>(
-  context: ValidLock3Context<THeld> extends string ? never : ValidLock3Context<THeld>
-): void {
-  // This function accepts contexts that:
-  // - Can acquire LOCK_3 (empty, has LOCK_1, has LOCK_2, etc.)
-  // - Already have LOCK_3
-  console.log(`Processing with: ${context.toString()}`);
-}
-
-// ✅ All valid scenarios (compile-time verified):
-const emptyCtx = createLockContext();                    // Can acquire LOCK_3
-const ctx1 = await createLockContext().acquireWrite(LOCK_1);  // Can acquire LOCK_3
-const ctx2 = await createLockContext().acquireWrite(LOCK_2);  // Can acquire LOCK_3  
-const ctx3 = await createLockContext().acquireWrite(LOCK_3);  // Already has LOCK_3
-
-processWithLock3(emptyCtx); processWithLock3(ctx1); 
-processWithLock3(ctx2); processWithLock3(ctx3);
-
-// ❌ Compile error: cannot acquire LOCK_3 when holding higher locks
-const ctx5 = await createLockContext().acquireWrite(LOCK_5);
-// processWithLock3(ctx5);  // "Cannot acquire lock 3 when holding lock 5"
-```
-
-### 3. Composable Type System Benefits
-
-The new composable ValidLockContext system provides:
-
-```typescript
-// Building blocks work across all 15 lock levels
-import type { 
-  ValidLock1Context, ValidLock5Context, ValidLock10Context, ValidLock15Context,
-  HasLock, CanAcquireLock3, MaxHeldLock 
-} from './src/core';
-
-// Functions for different privilege levels
-function basicOp<T extends readonly any[]>(ctx: ValidLock1Context<T>) { /* ... */ }
-function dataOp<T extends readonly any[]>(ctx: ValidLock5Context<T>) { /* ... */ }  
-function auditOp<T extends readonly any[]>(ctx: ValidLock10Context<T>) { /* ... */ }
-function adminOp<T extends readonly any[]>(ctx: ValidLock15Context<T>) { /* ... */ }
-
-// Progressive usage with clear patterns
-const ctx = createLockContext();
-basicOp(ctx);  // ✅ Empty context can acquire LOCK_1
-
-const ctx1 = await ctx.acquireWrite(LOCK_1);
-basicOp(ctx1); dataOp(ctx1); auditOp(ctx1); adminOp(ctx1);  // ✅ All work
-
-const ctx15 = await ctx1.acquireWrite(LOCK_5);
-dataOp(ctx15); auditOp(ctx15); adminOp(ctx15);  // ✅ Higher levels work
-// basicOp(ctx15);  // ❌ Cannot acquire LOCK_1 when holding LOCK_5
-
-ctx15.dispose();
 ```
 
 ## Error Prevention

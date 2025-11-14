@@ -14,30 +14,34 @@ npm install @markdrei/ironguard-typescript-locks
 import { 
   createLockContext, 
   LOCK_1, 
-  LOCK_2, 
-  ValidLock2Context 
+  LOCK_2,
+  type Contains,
+  type LockContext,
+  type LockLevel
 } from '@markdrei/ironguard-typescript-locks';
 
-// Function requires LOCK_2 to be held or acquirable - enforced at compile-time!
-async function processData<T extends readonly any[]>(
-  ctx: ValidLock2Context<T>
+// Function requires LOCK_2 to be held - enforced at compile-time!
+async function processData<T extends readonly LockLevel[]>(
+  ctx: Contains<T, 2> extends true ? LockContext<T> : never
 ): Promise<void> {
-  const lockCtx = await ctx.acquireWrite(LOCK_2);
   // ... your critical section logic here ...
-  lockCtx.dispose();
+  ctx.useLock(LOCK_2, () => {
+    // Access protected resource
+  });
 }
 
 // Usage
 async function example(): Promise<void> {
   const ctx = await createLockContext().acquireWrite(LOCK_1);
+  const ctx2 = await ctx.acquireWrite(LOCK_2);
   
-  // ✅ This works - LOCK_2 can be acquired after LOCK_1
-  await processData(ctx);
+  // ✅ This works - LOCK_2 is held
+  await processData(ctx2);
   
   // ❌ This would fail at compile-time:
-  // await processData(await createLockContext()); // No LOCK_2 available
+  // await processData(ctx); // Does not have LOCK_2
   
-  ctx.dispose();
+  ctx2.dispose();
 }
 ```
 
@@ -84,46 +88,51 @@ const writer = await createLockContext().acquireWrite(LOCK_3);  // ⏳ Waits
 ```
 
 ### Context Transfer with Compile-Time Validation
-Type-safe function parameters with composable ValidLockContext types:
+Type-safe function parameters with constraint types:
 
 ```typescript
-// Composable building blocks for all 15 lock levels
-type HasLock<THeld, Level> = Contains<THeld, Level>;
-type CanAcquireLock3<THeld> = /* hierarchical composition logic */;
+// Building block for type constraints
+type Contains<T, Level> = /* checks if Level is in T */;
 
-// Function that requires LOCK_3 (works with multiple scenarios)
-function processData<THeld extends readonly any[]>(
-  ctx: ValidLock3Context<THeld> extends string ? never : ValidLock3Context<THeld>
+// Function that requires LOCK_3 to be held
+function processData<THeld extends readonly LockLevel[]>(
+  ctx: Contains<THeld, 3> extends true ? LockContext<THeld> : never
 ): string {
-  // TypeScript guarantees LOCK_3 can be used - compile-time safety
+  // TypeScript guarantees LOCK_3 is held - compile-time safety
   return `Processing with: ${ctx.toString()}`;
 }
 
-// ✅ Valid scenarios (all work at compile-time):
-const emptyCtx = createLockContext();           // Can acquire LOCK_3
-const ctx1 = await createLockContext().acquireRead(LOCK_1);  // Can acquire LOCK_3  
-const ctx2 = await createLockContext().acquireRead(LOCK_2);  // Can acquire LOCK_3
-const ctx3 = await createLockContext().acquireRead(LOCK_3);  // Already has LOCK_3
+// ✅ Valid scenarios:
+const ctx3 = await createLockContext().acquireRead(LOCK_3);  // Has LOCK_3
+processData(ctx3);
 
-processData(emptyCtx); processData(ctx1); processData(ctx2); processData(ctx3);
+const ctx123 = await createLockContext()
+  .acquireRead(LOCK_1)
+  .then(c => c.acquireRead(LOCK_2))
+  .then(c => c.acquireRead(LOCK_3));  // Has LOCK_3 among others
+processData(ctx123);
 
-// ❌ Compile error: cannot acquire LOCK_3 when holding higher locks
-const ctx5 = await createLockContext().acquireRead(LOCK_5);
-processData(ctx5); // "Cannot acquire lock 3 when holding lock 5. Locks must be acquired in order."
+// ❌ Compile error: does not have LOCK_3
+const ctx1 = await createLockContext().acquireRead(LOCK_1);
+// processData(ctx1); // Compile-time error
 ```
 
-### Composable ValidLockContext Types (All 15 Levels)
-New composable type system with building blocks and hierarchical composition:
+### Flexible Lock Context Types
+Use OrderedSubsequences for maximum flexibility:
 
-**Building Blocks:**
-- `HasLock<THeld, Level>` - Checks if a specific lock is already held
-- `CanAcquireLockX<THeld>` - Hierarchical rules for acquiring lock X
-- `ValidLockXContext<THeld>` - Combines HasLock OR CanAcquire with error messages
+```typescript
+// Function accepts any ordered lock combination
+type LocksAtMost3 = OrderedSubsequences<readonly [1, 2, 3]>;
+async function flexibleFunction(ctx: LockContext<LocksAtMost3>): Promise<void> {
+  // Accepts: [], [1], [2], [3], [1,2], [1,3], [2,3], [1,2,3]
+}
+```
 
-**All 15 Lock Levels Supported:**
-- `ValidLock1Context` through `ValidLock15Context` 
-- Hierarchical composition: `CanAcquireLock3` builds on `CanAcquireLock2`
-- Descriptive error messages: "Cannot acquire lock 3 when holding lock 8"
+**Building Blocks Available:**
+- `HasLock<THeld, Level>` - Checks if a specific lock is held
+- `CanAcquireLockX<THeld>` - Validates lock acquisition rules
+- `Contains<T, Level>` - Type-safe lock presence checking
+- `OrderedSubsequences<T>` - Generates all valid lock combinations
 - Easy to extend: Adding new lock levels requires minimal code
 
 ## What's Missing
