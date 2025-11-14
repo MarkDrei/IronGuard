@@ -9,12 +9,10 @@
     "removeComments": true
   },
   "include": [
-    "src/index.ts",
-    "src/core/**/*"
+    "src/**/*"
   ],
   "exclude": [
     "tests/**/*",
-    "src/examples/**/*",
     "scripts/**/*",
     "**/*.test.ts",
     "**/*.spec.ts",

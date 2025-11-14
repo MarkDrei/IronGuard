@@ -155,18 +155,7 @@ dispose(): void {
 ## Recommended Design Solutions
 
 ### 1. **API Design**
-```typescript
-// Explicit read/write methods (deprecate acquire)
-class LockContext<THeldLocks extends readonly LockLevel[]> {
-  async acquireRead<TLock extends LockLevel>(
-    lock: CanAcquire<THeldLocks, TLock> extends true ? TLock : never
-  ): Promise<LockContext<[...THeldLocks, TLock]>>
-
-  async acquireWrite<TLock extends LockLevel>(
-    lock: CanAcquire<THeldLocks, TLock> extends true ? TLock : never  
-  ): Promise<LockContext<[...THeldLocks, TLock]>>
-}
-```
+(removed, outdated)
 
 ### 2. **Runtime Manager Design**
 ```typescript
@@ -228,7 +217,6 @@ Keep existing constraint types unchanged - they work for both read and write loc
 // Building block types (reusable across all 15 lock levels)
 type HasLock<THeld, Level> = Contains<THeld, Level>;
 type MaxHeldLock<THeld> = /* gets highest held lock */;
-type CanAcquireLockX<THeld> = /* hierarchical composition */;
 
 // Function constraints use building blocks
 function requiresLock3<THeld extends readonly LockLevel[]>(
@@ -240,7 +228,6 @@ function requiresLock3<THeld extends readonly LockLevel[]>(
 
 #### Benefits Achieved
 - **All 15 lock levels**: Building blocks for all locks
-- **Hierarchical composition**: `CanAcquireLock3` builds on `CanAcquireLock2`
 - **Descriptive errors**: Clear TypeScript error messages
 - **Maintainable**: Adding new lock levels requires minimal code
 - **Read/write agnostic**: Works with both `acquireRead()` and `acquireWrite()`

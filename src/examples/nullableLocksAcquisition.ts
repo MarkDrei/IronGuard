@@ -22,10 +22,9 @@ async function processWithAdditionalLock<THeld extends readonly LockLevel[]>(
   ctx: NullableLocksAtMost12<THeld>
 ): Promise<void> {
   if (ctx !== null) {
-    const locks = ctx.getHeldLocks();
-    const maxLock = locks.length > 0 ? Math.max(...locks) : 0;
+    const maxLock = ctx.getMaxHeldLock();
     
-    console.log(`Processing with locks: [${locks}]`);
+    console.log(`Processing with locks: [${ctx.getHeldLocks()}]`);
     
     // Runtime check before acquiring additional lock
     if (maxLock <= 12) {

@@ -130,7 +130,6 @@ async function flexibleFunction(ctx: LockContext<LocksAtMost3>): Promise<void> {
 
 **Building Blocks Available:**
 - `HasLock<THeld, Level>` - Checks if a specific lock is held
-- `CanAcquireLockX<THeld>` - Validates lock acquisition rules
 - `Contains<T, Level>` - Type-safe lock presence checking
 - `OrderedSubsequences<T>` - Generates all valid lock combinations
 - Easy to extend: Adding new lock levels requires minimal code
