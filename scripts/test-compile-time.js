@@ -90,54 +90,6 @@ async function test() {
 `
   },
   {
-    name: 'Invalid ValidLock3Context: LOCK_4',
-    code: `
-import { createLockContext, LOCK_4 } from 'src/core';
-import type { ValidLock3Context, LockLevel } from 'src/core';
-function needsLock3<T extends readonly LockLevel[]>(ctx: ValidLock3Context<T>) { return ctx; }
-async function test() {
-  const ctx4 = await createLockContext().acquireWrite(LOCK_4);
-  needsLock3(ctx4); // Should fail: LOCK_4 cannot acquire LOCK_3
-}
-`
-  },
-  {
-    name: 'Invalid ValidLock3Context: LOCK_5',
-    code: `
-import { createLockContext, LOCK_5 } from 'src/core';
-import type { ValidLock3Context, LockLevel } from 'src/core';
-function needsLock3<T extends readonly LockLevel[]>(ctx: ValidLock3Context<T>) { return ctx; }
-async function test() {
-  const ctx5 = await createLockContext().acquireWrite(LOCK_5);
-  needsLock3(ctx5); // Should fail: LOCK_5 cannot acquire LOCK_3
-}
-`
-  },
-  {
-    name: 'Invalid ValidLock3Context: LOCK_4 + LOCK_5',
-    code: `
-import { createLockContext, LOCK_4, LOCK_5 } from 'src/core';
-import type { ValidLock3Context, LockLevel } from 'src/core';
-function needsLock3<T extends readonly LockLevel[]>(ctx: ValidLock3Context<T>) { return ctx; }
-async function test() {
-  const ctx45 = await createLockContext().acquireWrite(LOCK_4).then(c => c.acquireWrite(LOCK_5));
-  needsLock3(ctx45); // Should fail: LOCK_4,LOCK_5 cannot acquire LOCK_3
-}
-`
-  },
-  {
-    name: 'Invalid ValidLock3Context: context with LOCK_4 but no LOCK_3',
-    code: `
-import { createLockContext, LOCK_4 } from '../src/core';
-import type { ValidLock3Context, LockLevel } from '../src/core';
-function needsLock3<T extends readonly LockLevel[]>(ctx: ValidLock3Context<T>) { return ctx; }
-async function test() {
-  const ctx4 = await createLockContext().acquireWrite(LOCK_4);
-  needsLock3(ctx4); // Should fail: has LOCK_4 without LOCK_3
-}
-`
-  },
-  {
     name: 'Function requires LOCK_2 but only has LOCK_1',
     code: `
 import { createLockContext, LOCK_1 } from 'src/core';
@@ -501,38 +453,6 @@ async function test() {
   const hasLock3 = ctx123.hasLock(LOCK_3);
   
   ctx123.dispose();
-}
-`
-  },
-  {
-    name: 'Valid ValidLock3Context usage',
-    code: `
-import { createLockContext, LOCK_1, LOCK_2, LOCK_3 } from 'src/core';
-import type { ValidLock3Context, LockLevel } from 'src/core';
-
-function needsLock3<T extends readonly LockLevel[]>(ctx: ValidLock3Context<T>) { 
-  return ctx; 
-}
-
-async function test() {
-  // Empty context can acquire LOCK_3
-  const empty = createLockContext();
-  needsLock3(empty);
-  
-  // Context with LOCK_1 can acquire LOCK_3
-  const ctx1 = await createLockContext().acquireWrite(LOCK_1);
-  needsLock3(ctx1);
-  ctx1.dispose();
-  
-  // Context with LOCK_2 can acquire LOCK_3
-  const ctx2 = await createLockContext().acquireWrite(LOCK_2);
-  needsLock3(ctx2);
-  ctx2.dispose();
-  
-  // Context with LOCK_3 already has it
-  const ctx3 = await createLockContext().acquireWrite(LOCK_3);
-  needsLock3(ctx3);
-  ctx3.dispose();
 }
 `
   },

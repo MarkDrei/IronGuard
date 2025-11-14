@@ -107,12 +107,10 @@ const ctx3 = await ctx2.acquireRead(LOCK_4);   // Valid?
 #### 5. **Type System Integration**
 **Issue**: How do read/write modes integrate with existing constraint types?
 ```typescript
-// Current
-type ValidLock3Context<THeld> = /* checks if can acquire LOCK_3 */
-
-// Proposed: Need separate constraints?
-type ValidLock3ReadContext<THeld> = /* ... */
-type ValidLock3WriteContext<THeld> = /* ... */
+// Function constraints work with both read and write modes
+type RequiresLock3<THeld> = Contains<THeld, 3> extends true 
+  ? LockContext<THeld> 
+  : never;
 ```
 
 ### 🔧 Implementation Challenges
@@ -222,7 +220,7 @@ Keep existing constraint types unchanged - they work for both read and write loc
 ### Phase 4 (Completed): Remove acquire()
 ✅ **Completed**: The legacy `acquire()` method has been removed. Only explicit `acquireRead()` and `acquireWrite()` methods are supported.
 
-### Phase 5 (Completed): Composable ValidLockContext Types
+### Phase 5 (Completed): Enhanced Type System
 ✅ **Completed**: Enhanced the type system with composable building blocks:
 
 #### New Composable Architecture
@@ -232,19 +230,18 @@ type HasLock<THeld, Level> = Contains<THeld, Level>;
 type MaxHeldLock<THeld> = /* gets highest held lock */;
 type CanAcquireLockX<THeld> = /* hierarchical composition */;
 
-// ValidLockContext types now composable and descriptive
-type ValidLock3Context<THeld> = 
-  HasLock<THeld, 3> extends true 
-    ? LockContext<THeld>  // Already has LOCK_3
-    : CanAcquireLock3<THeld> extends true 
-      ? LockContext<THeld>  // Can acquire LOCK_3
-      : 'IronGuard: Cannot acquire lock 3 when holding lock X';
+// Function constraints use building blocks
+function requiresLock3<THeld extends readonly LockLevel[]>(
+  ctx: Contains<THeld, 3> extends true ? LockContext<THeld> : never
+): void {
+  // Function requires LOCK_3 to be held
+}
 ```
 
 #### Benefits Achieved
-- **All 15 lock levels**: `ValidLock1Context` through `ValidLock15Context`
+- **All 15 lock levels**: Building blocks for all locks
 - **Hierarchical composition**: `CanAcquireLock3` builds on `CanAcquireLock2`
-- **Descriptive errors**: "Cannot acquire lock 3 when holding lock 8" 
+- **Descriptive errors**: Clear TypeScript error messages
 - **Maintainable**: Adding new lock levels requires minimal code
 - **Read/write agnostic**: Works with both `acquireRead()` and `acquireWrite()`
 

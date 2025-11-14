@@ -306,12 +306,12 @@ type CanAcquire<THeld extends readonly LockLevel[], TLock extends LockLevel> =
  * @example
  * ```typescript
  * // For SUPPORTED_LOCK_LEVELS = [1, 2, 3]
- * type ValidLockContextsFlexible = OrderedSubsequences<SUPPORTED_LOCK_LEVELS>;
+ * type FlexibleLockContexts = OrderedSubsequences<SUPPORTED_LOCK_LEVELS>;
  * // Produces: [] | [1] | [2] | [3] | [1,2] | [1,3] | [2,3] | [1,2,3]
  *
  * // Use in function signatures for maximum flexibility:
  * async function veryFlexibleFunction(
- *   context: LockContext<ValidLockContextsFlexible>
+ *   context: LockContext<FlexibleLockContexts>
  * ): Promise<void> {
  *   // Function accepts ANY ordered lock combination
  * }

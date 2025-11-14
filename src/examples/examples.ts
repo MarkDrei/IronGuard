@@ -16,8 +16,7 @@ import {
   LOCK_12,
   LOCK_15,
   type Contains,
-  type LockLevel,
-  type ValidLock3Context
+  type LockLevel
 } from '../core';
 
 // Example 1: Function that requires a specific lock
@@ -75,23 +74,7 @@ async function demonstrateLockSkipping(): Promise<void> {
   skip8to15.dispose();
 }
 
-// Flexible function that needs lock 3 - can acquire it or use existing
-async function flexibleLock3Function<THeld extends readonly LockLevel[]>(
-  context: ValidLock3Context<THeld>
-): Promise<LockContext<any>> {
-  // This function demonstrates compile-time validation for flexible lock usage
-  // It can work with empty contexts, contexts with lock 3, or contexts that can acquire lock 3
-  console.log(`Flexible lock 3 function called with: ${context.toString()}`);
-  
-  // Note: Due to TypeScript's complex generic constraints, the actual lock usage
-  // is demonstrated in concrete examples below rather than within this generic function.
-  // The key innovation is that this function can ONLY be called with valid lock contexts.
-  
-  return context as any;
-}
-
 export {
   functionRequiringLock2,
-  demonstrateLockSkipping,
-  flexibleLock3Function
+  demonstrateLockSkipping
 };

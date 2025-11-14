@@ -19,8 +19,7 @@ import {
 
 import {
   functionRequiringLock2,
-  demonstrateLockSkipping,
-  flexibleLock3Function
+  demonstrateLockSkipping
 } from './examples';
 
 import { demonstrateCompileTimeViolations } from './compileTimeViolations';
@@ -67,22 +66,6 @@ async function main(): Promise<void> {
   // Release lock 2
   ctxWithLock2.dispose();
   
-  // Flexible lock 3 function examples
-  console.log('\n=== Flexible Lock 3 Function ===');
-  console.log('Different scenarios (sequential):');
-  
-  const emptyCtx = createLockContext();
-  const result1 = await flexibleLock3Function(emptyCtx);          // Acquires lock 3
-  result1.dispose(); // Release lock 3
-  
-  const flexCtxWithLock1 = await createLockContext().acquireWrite(LOCK_1);
-  const result2 = await flexibleLock3Function(flexCtxWithLock1);  // Acquires lock 3 
-  result2.dispose(); // Release locks
-  
-  const flexCtxWithLock3 = await createLockContext().acquireWrite(LOCK_3);
-  const result3 = await flexibleLock3Function(flexCtxWithLock3);  // Uses existing lock 3
-  result3.dispose(); // Release lock 3
-  
   // More examples
   await demonstrateLockSkipping();
   
@@ -106,10 +89,6 @@ async function main(): Promise<void> {
   
   // Flexible lock context types demo
   await runFlexibleLockTypesDemo();
-  
-  // Composable types system demo
-  const { runComposableTypesDemo } = await import('./composableTypesDemo');
-  await runComposableTypesDemo();
   
   console.log('\n=== Key Benefits ===');
   console.log('✓ Runtime mutual exclusion (real thread safety)');
