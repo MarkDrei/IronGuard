@@ -41,7 +41,13 @@ export type {
   LocksAtMost6,
   LocksAtMost7,
   LocksAtMost8,
-  LocksAtMost9
+  LocksAtMost9,
+  NullableLocksAtMost10,
+  NullableLocksAtMost11,
+  NullableLocksAtMost12,
+  NullableLocksAtMost13,
+  NullableLocksAtMost14,
+  NullableLocksAtMost15
 } from './ironGuardSystem';
 
 // Advanced constraint types

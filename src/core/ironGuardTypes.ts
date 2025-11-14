@@ -196,6 +196,130 @@ type CanAcquireLock15<THeld extends readonly LockLevel[]> =
 
 // =============================================================================
 // =============================================================================
+// HASLOCK CONTEXT TYPES - Simple lock presence constraints
+// =============================================================================
+
+/**
+ * HasLockXContext types provide simple boolean checks for lock presence.
+ * 
+ * These types are useful when you need to verify that a specific lock is held,
+ * regardless of what other locks might be present in the context.
+ * 
+ * Use these when:
+ * - You need to ensure a specific lock is held before calling a function
+ * - You want compile-time validation that a lock is present
+ * - You don't care about lock ordering or other locks in the context
+ * 
+ * @example
+ * ```typescript
+ * function processWithLock3<THeld extends readonly LockLevel[]>(
+ *   ctx: HasLock3Context<THeld>
+ * ): void {
+ *   // TypeScript guarantees LOCK_3 is present in ctx
+ *   ctx.useLock(LOCK_3, () => {
+ *     console.log('Processing with LOCK_3');
+ *   });
+ * }
+ * 
+ * const ctx = await createLockContext().acquireWrite(LOCK_3);
+ * processWithLock3(ctx); // ✅ Compiles - LOCK_3 is held
+ * 
+ * const ctx1 = await createLockContext().acquireWrite(LOCK_1);
+ * processWithLock3(ctx1); // ❌ Compile error - LOCK_3 not held
+ * ```
+ */
+
+/** Context that must hold LOCK_1 */
+type HasLock1Context<THeld extends readonly LockLevel[]> =
+  HasLock<THeld, 1> extends true
+    ? LockContext<THeld>
+    : 'IronGuard: Context must hold LOCK_1';
+
+/** Context that must hold LOCK_2 */
+type HasLock2Context<THeld extends readonly LockLevel[]> =
+  HasLock<THeld, 2> extends true
+    ? LockContext<THeld>
+    : 'IronGuard: Context must hold LOCK_2';
+
+/** Context that must hold LOCK_3 */
+type HasLock3Context<THeld extends readonly LockLevel[]> =
+  HasLock<THeld, 3> extends true
+    ? LockContext<THeld>
+    : 'IronGuard: Context must hold LOCK_3';
+
+/** Context that must hold LOCK_4 */
+type HasLock4Context<THeld extends readonly LockLevel[]> =
+  HasLock<THeld, 4> extends true
+    ? LockContext<THeld>
+    : 'IronGuard: Context must hold LOCK_4';
+
+/** Context that must hold LOCK_5 */
+type HasLock5Context<THeld extends readonly LockLevel[]> =
+  HasLock<THeld, 5> extends true
+    ? LockContext<THeld>
+    : 'IronGuard: Context must hold LOCK_5';
+
+/** Context that must hold LOCK_6 */
+type HasLock6Context<THeld extends readonly LockLevel[]> =
+  HasLock<THeld, 6> extends true
+    ? LockContext<THeld>
+    : 'IronGuard: Context must hold LOCK_6';
+
+/** Context that must hold LOCK_7 */
+type HasLock7Context<THeld extends readonly LockLevel[]> =
+  HasLock<THeld, 7> extends true
+    ? LockContext<THeld>
+    : 'IronGuard: Context must hold LOCK_7';
+
+/** Context that must hold LOCK_8 */
+type HasLock8Context<THeld extends readonly LockLevel[]> =
+  HasLock<THeld, 8> extends true
+    ? LockContext<THeld>
+    : 'IronGuard: Context must hold LOCK_8';
+
+/** Context that must hold LOCK_9 */
+type HasLock9Context<THeld extends readonly LockLevel[]> =
+  HasLock<THeld, 9> extends true
+    ? LockContext<THeld>
+    : 'IronGuard: Context must hold LOCK_9';
+
+/** Context that must hold LOCK_10 */
+type HasLock10Context<THeld extends readonly LockLevel[]> =
+  HasLock<THeld, 10> extends true
+    ? LockContext<THeld>
+    : 'IronGuard: Context must hold LOCK_10';
+
+/** Context that must hold LOCK_11 */
+type HasLock11Context<THeld extends readonly LockLevel[]> =
+  HasLock<THeld, 11> extends true
+    ? LockContext<THeld>
+    : 'IronGuard: Context must hold LOCK_11';
+
+/** Context that must hold LOCK_12 */
+type HasLock12Context<THeld extends readonly LockLevel[]> =
+  HasLock<THeld, 12> extends true
+    ? LockContext<THeld>
+    : 'IronGuard: Context must hold LOCK_12';
+
+/** Context that must hold LOCK_13 */
+type HasLock13Context<THeld extends readonly LockLevel[]> =
+  HasLock<THeld, 13> extends true
+    ? LockContext<THeld>
+    : 'IronGuard: Context must hold LOCK_13';
+
+/** Context that must hold LOCK_14 */
+type HasLock14Context<THeld extends readonly LockLevel[]> =
+  HasLock<THeld, 14> extends true
+    ? LockContext<THeld>
+    : 'IronGuard: Context must hold LOCK_14';
+
+/** Context that must hold LOCK_15 */
+type HasLock15Context<THeld extends readonly LockLevel[]> =
+  HasLock<THeld, 15> extends true
+    ? LockContext<THeld>
+    : 'IronGuard: Context must hold LOCK_15';
+
+// =============================================================================
 // EXPORTS
 // =============================================================================
 

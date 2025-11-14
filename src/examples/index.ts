@@ -27,6 +27,7 @@ import { demonstrateMutualExclusion } from './mutualExclusionDemo';
 import { demonstrateRollback } from './rollbackDemo';
 import { demonstrateFeatureCombinations } from './featureCombinationsDemo';
 import { runAllExamples as runReadWriteExamples } from './readWriteExamples';
+import './nullableLocksAcquisition';
 import { runContextTransferDemo } from './contextTransferDemo';
 import { runFlexibleLockTypesDemo } from './flexibleLockTypesDemo';
 

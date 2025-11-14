@@ -9,6 +9,8 @@
  * - Configurable lock levels (easily change from 5 to any number)
  */
 
+import type { MaxHeldLock } from './ironGuardTypes';
+
 // =============================================================================
 // CONFIGURATION SECTION - Easily configurable lock system
 // =============================================================================
@@ -389,6 +391,79 @@ type LocksAtMost9 = OrderedSubsequences<readonly [1, 2, 3, 4, 5, 6, 7, 8, 9]>;
 // type LocksAtMost10 = OrderedSubsequences<readonly [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]>;
 // type LocksAtMost14 = OrderedSubsequences<readonly [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]>;
 
+// =============================================================================
+// NULLABLE LOCKSATMOST TYPES - For conditional lock patterns
+// =============================================================================
+
+/**
+ * Nullable lock context types for advanced conditional patterns.
+ * 
+ * These types enable a nullable approach where contexts can be either LockContext<T> or null,
+ * providing compile-time safety while allowing flexible function signatures that can gracefully
+ * handle invalid lock states.
+ * 
+ * Use these when you need functions that:
+ * - Accept contexts conditionally based on held locks
+ * - Can handle both valid and invalid contexts at the call site
+ * - Require explicit null checking for type narrowing
+ * 
+ * @example
+ * ```typescript
+ * type NullableLocksAtMost10<THeld extends readonly LockLevel[]> =
+ *   CanAcquireLock10<THeld> extends true
+ *     ? LockContext<THeld>
+ *     : null;
+ * 
+ * function processWithLock10<THeld extends readonly LockLevel[]>(
+ *   ctx: NullableLocksAtMost10<THeld>
+ * ): void {
+ *   if (ctx !== null) {
+ *     // TypeScript knows ctx is LockContext<THeld> here
+ *     ctx.getHeldLocks();
+ *   }
+ * }
+ * ```
+ * 
+ * Note: These are defined for levels 10-15 as they complement the LocksAtMost1-9 types.
+ * For lower levels (1-9), use the standard LocksAtMost types or CanAcquireLock predicates.
+ */
+
+/** Nullable context for locks up to level 10 (1,024 combinations) */
+type NullableLocksAtMost10<THeld extends readonly LockLevel[]> =
+  MaxHeldLock<THeld> extends 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
+    ? LockContext<THeld>
+    : null;
+
+/** Nullable context for locks up to level 11 (2,048 combinations) */
+type NullableLocksAtMost11<THeld extends readonly LockLevel[]> =
+  MaxHeldLock<THeld> extends 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11
+    ? LockContext<THeld>
+    : null;
+
+/** Nullable context for locks up to level 12 (4,096 combinations) */
+type NullableLocksAtMost12<THeld extends readonly LockLevel[]> =
+  MaxHeldLock<THeld> extends 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12
+    ? LockContext<THeld>
+    : null;
+
+/** Nullable context for locks up to level 13 (8,192 combinations) */
+type NullableLocksAtMost13<THeld extends readonly LockLevel[]> =
+  MaxHeldLock<THeld> extends 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13
+    ? LockContext<THeld>
+    : null;
+
+/** Nullable context for locks up to level 14 (16,384 combinations) */
+type NullableLocksAtMost14<THeld extends readonly LockLevel[]> =
+  MaxHeldLock<THeld> extends 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14
+    ? LockContext<THeld>
+    : null;
+
+/** Nullable context for locks up to level 15 (32,768 combinations) - Performance warning: 2x compile time */
+type NullableLocksAtMost15<THeld extends readonly LockLevel[]> =
+  MaxHeldLock<THeld> extends 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15
+    ? LockContext<THeld>
+    : null;
+
 class LockContext<THeldLocks extends readonly LockLevel[] = readonly []> {
   private heldLocks: THeldLocks;
   private lockModes = new Map<LockLevel, LockMode>();
@@ -564,5 +639,11 @@ export type {
   LocksAtMost6,
   LocksAtMost7,
   LocksAtMost8,
-  LocksAtMost9
+  LocksAtMost9,
+  NullableLocksAtMost10,
+  NullableLocksAtMost11,
+  NullableLocksAtMost12,
+  NullableLocksAtMost13,
+  NullableLocksAtMost14,
+  NullableLocksAtMost15
 };
