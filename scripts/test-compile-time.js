@@ -194,6 +194,74 @@ async function test() {
 }
 `
   },
+  // Release lock - invalid patterns
+  {
+    name: 'releaseLock: Cannot release non-held lock LOCK_3',
+    code: `
+import { createLockContext, LOCK_1, LOCK_2, LOCK_3 } from 'src/core';
+async function test() {
+  const ctx12 = await createLockContext().acquireWrite(LOCK_1).then(c => c.acquireWrite(LOCK_2));
+  const invalid = ctx12.releaseLock(LOCK_3); // Should fail: LOCK_3 not held
+}
+`
+  },
+  {
+    name: 'releaseLock: Cannot release from empty context',
+    code: `
+import { createLockContext, LOCK_1 } from 'src/core';
+async function test() {
+  const empty = createLockContext();
+  const invalid = empty.releaseLock(LOCK_1); // Should fail: no locks held
+}
+`
+  },
+  {
+    name: 'releaseLock: Cannot release LOCK_5 from context [1,2,3]',
+    code: `
+import { createLockContext, LOCK_1, LOCK_2, LOCK_3, LOCK_5 } from 'src/core';
+async function test() {
+  const ctx123 = await createLockContext()
+    .acquireWrite(LOCK_1)
+    .then(c => c.acquireWrite(LOCK_2))
+    .then(c => c.acquireWrite(LOCK_3));
+  const invalid = ctx123.releaseLock(LOCK_5); // Should fail: LOCK_5 not held
+}
+`
+  },
+  {
+    name: 'releaseLock: Cannot release LOCK_4 from context [1,3]',
+    code: `
+import { createLockContext, LOCK_1, LOCK_3, LOCK_4 } from 'src/core';
+async function test() {
+  const ctx13 = await createLockContext().acquireWrite(LOCK_1).then(c => c.acquireWrite(LOCK_3));
+  const invalid = ctx13.releaseLock(LOCK_4); // Should fail: LOCK_4 not held (skipped)
+}
+`
+  },
+  {
+    name: 'releaseLock: Cannot release high lock LOCK_15 from context [10,12]',
+    code: `
+import { createLockContext, LOCK_10, LOCK_12, LOCK_15 } from 'src/core';
+async function test() {
+  const ctx1012 = await createLockContext().acquireWrite(LOCK_10).then(c => c.acquireWrite(LOCK_12));
+  const invalid = ctx1012.releaseLock(LOCK_15); // Should fail: LOCK_15 not held
+}
+`
+  },
+  {
+    name: 'releaseLock: Cannot release same lock twice',
+    code: `
+import { createLockContext, LOCK_1, LOCK_2, LOCK_3 } from 'src/core';
+async function test() {
+  const ctx123 = await createLockContext()
+    .acquireWrite(LOCK_1)
+    .then(c => c.acquireWrite(LOCK_2))
+    .then(c => c.acquireWrite(LOCK_3));
+  const ctx13 = ctx123.releaseLock(LOCK_2);
+  const invalid = ctx13.releaseLock(LOCK_2); // Should fail: LOCK_2 already released
+}
+`
+  },
   // LocksAtMost flexible types - invalid patterns
   {
     name: 'LocksAtMost5: Cannot acquire lock within range',
@@ -261,6 +329,106 @@ async function needsAtMost4(ctx: LockContext<LocksAtMost4>): Promise<void> {}
 async function test() {
   const ctx15 = await createLockContext().acquireWrite(LOCK_1).then(c => c.acquireWrite(LOCK_5));
   await needsAtMost4(ctx15); // Should fail: [1,5] has lock 5 which is > 4
+}
+`
+  },
+  // NullableLocksAtMost types - invalid patterns
+  {
+    name: 'NullableLocksAtMost10: Context [12] cannot be passed',
+    code: `
+import { createLockContext, LOCK_12, type NullableLocksAtMost10, type LockLevel } from 'src/core';
+function needsAtMost10<T extends readonly LockLevel[]>(ctx: NullableLocksAtMost10<T>): void {}
+async function test() {
+  const ctx12 = await createLockContext().acquireWrite(LOCK_12);
+  needsAtMost10(ctx12); // Should fail: 12 > 10
+}
+`
+  },
+  {
+    name: 'NullableLocksAtMost12: Context [15] cannot be passed',
+    code: `
+import { createLockContext, LOCK_15, type NullableLocksAtMost12, type LockLevel } from 'src/core';
+function needsAtMost12<T extends readonly LockLevel[]>(ctx: NullableLocksAtMost12<T>): void {}
+async function test() {
+  const ctx15 = await createLockContext().acquireWrite(LOCK_15);
+  needsAtMost12(ctx15); // Should fail: 15 > 12
+}
+`
+  },
+  {
+    name: 'NullableLocksAtMost11: Context [14] cannot be passed',
+    code: `
+import { createLockContext, LOCK_14, type NullableLocksAtMost11, type LockLevel } from 'src/core';
+function needsAtMost11<T extends readonly LockLevel[]>(ctx: NullableLocksAtMost11<T>): void {}
+async function test() {
+  const ctx14 = await createLockContext().acquireWrite(LOCK_14);
+  needsAtMost11(ctx14); // Should fail: 14 > 11
+}
+`
+  },
+  // HasLockContext types - invalid patterns
+  {
+    name: 'HasLock3Context: Context [1] cannot be passed',
+    code: `
+import { createLockContext, LOCK_1, type HasLock3Context, type LockLevel } from 'src/core';
+function needsLock3<T extends readonly LockLevel[]>(
+  ctx: HasLock3Context<T> extends string ? never : HasLock3Context<T>
+): void {}
+async function test() {
+  const ctx1 = await createLockContext().acquireWrite(LOCK_1);
+  needsLock3(ctx1); // Should fail: doesn't have LOCK_3
+}
+`
+  },
+  {
+    name: 'HasLock5Context: Context [3] cannot be passed',
+    code: `
+import { createLockContext, LOCK_3, type HasLock5Context, type LockLevel } from 'src/core';
+function needsLock5<T extends readonly LockLevel[]>(
+  ctx: HasLock5Context<T> extends string ? never : HasLock5Context<T>
+): void {}
+async function test() {
+  const ctx3 = await createLockContext().acquireWrite(LOCK_3);
+  needsLock5(ctx3); // Should fail: doesn't have LOCK_5
+}
+`
+  },
+  {
+    name: 'HasLock10Context: Context [8] cannot be passed',
+    code: `
+import { createLockContext, LOCK_8, type HasLock10Context, type LockLevel } from 'src/core';
+function needsLock10<T extends readonly LockLevel[]>(
+  ctx: HasLock10Context<T> extends string ? never : HasLock10Context<T>
+): void {}
+async function test() {
+  const ctx8 = await createLockContext().acquireWrite(LOCK_8);
+  needsLock10(ctx8); // Should fail: doesn't have LOCK_10
+}
+`
+  },
+  {
+    name: 'HasLock15Context: Context [12] cannot be passed',
+    code: `
+import { createLockContext, LOCK_12, type HasLock15Context, type LockLevel } from 'src/core';
+function needsLock15<T extends readonly LockLevel[]>(
+  ctx: HasLock15Context<T> extends string ? never : HasLock15Context<T>
+): void {}
+async function test() {
+  const ctx12 = await createLockContext().acquireWrite(LOCK_12);
+  needsLock15(ctx12); // Should fail: doesn't have LOCK_15
+}
+`
+  },
+  {
+    name: 'HasLock8Context: Empty context cannot be passed',
+    code: `
+import { createLockContext, type HasLock8Context, type LockLevel } from 'src/core';
+function needsLock8<T extends readonly LockLevel[]>(
+  ctx: HasLock8Context<T> extends string ? never : HasLock8Context<T>
+): void {}
+async function test() {
+  const empty = createLockContext();
+  needsLock8(empty); // Should fail: doesn't have LOCK_8
 }
 `
   }
@@ -423,15 +591,13 @@ async function test() {
     name: 'Valid type system interaction',
     code: `
 import { createLockContext, LOCK_1, LOCK_3, LOCK_5 } from 'src/core';
-import type { LockContext, LockLevel, Contains, CanAcquire } from 'src/core';
+import type { LockContext, LockLevel, Contains } from 'src/core';
 
 async function test() {
   // Type system should work correctly for valid cases
   const ctx1 = await createLockContext().acquireWrite(LOCK_1);
   
   // These type checks should all pass
-  const canAcquire3: CanAcquire<[1], 3> = true as const;
-  const canAcquire5: CanAcquire<[1], 5> = true as const;
   const hasLock1: Contains<[1], 1> = true as const;
   
   // Valid acquisitions based on type system
@@ -642,6 +808,304 @@ async function test() {
   await largePlugin(ctx5);
   
   ctx5.dispose();
+}
+`
+  },
+  // NullableLocksAtMost types - valid patterns
+  {
+    name: 'NullableLocksAtMost10: Accept context [8]',
+    code: `
+import { createLockContext, LOCK_8, type NullableLocksAtMost10, type LockLevel } from 'src/core';
+function needsAtMost10<T extends readonly LockLevel[]>(ctx: NullableLocksAtMost10<T>): void {
+  if (ctx !== null) {
+    console.log('Valid context:', ctx.getHeldLocks());
+  }
+}
+async function test() {
+  const ctx8 = await createLockContext().acquireWrite(LOCK_8);
+  needsAtMost10(ctx8); // Valid: 8 <= 10
+  ctx8.dispose();
+}
+`
+  },
+  {
+    name: 'NullableLocksAtMost12: Accept context [10]',
+    code: `
+import { createLockContext, LOCK_10, type NullableLocksAtMost12, type LockLevel } from 'src/core';
+function needsAtMost12<T extends readonly LockLevel[]>(ctx: NullableLocksAtMost12<T>): void {
+  if (ctx !== null) {
+    console.log('Valid context:', ctx.getHeldLocks());
+  }
+}
+async function test() {
+  const ctx10 = await createLockContext().acquireWrite(LOCK_10);
+  needsAtMost12(ctx10); // Valid: 10 <= 12
+  ctx10.dispose();
+}
+`
+  },
+  {
+    name: 'NullableLocksAtMost15: Accept context [15]',
+    code: `
+import { createLockContext, LOCK_15, type NullableLocksAtMost15, type LockLevel } from 'src/core';
+function needsAtMost15<T extends readonly LockLevel[]>(ctx: NullableLocksAtMost15<T>): void {
+  if (ctx !== null) {
+    console.log('Valid context:', ctx.getHeldLocks());
+  }
+}
+async function test() {
+  const ctx15 = await createLockContext().acquireWrite(LOCK_15);
+  needsAtMost15(ctx15); // Valid: 15 <= 15
+  ctx15.dispose();
+}
+`
+  },
+  {
+    name: 'NullableLocksAtMost11: Accept empty context',
+    code: `
+import { createLockContext, type NullableLocksAtMost11, type LockLevel } from 'src/core';
+function needsAtMost11<T extends readonly LockLevel[]>(ctx: NullableLocksAtMost11<T>): void {
+  if (ctx !== null) {
+    console.log('Valid context:', ctx.getHeldLocks());
+  }
+}
+async function test() {
+  const empty = createLockContext();
+  needsAtMost11(empty); // Valid: empty context (0 locks)
+}
+`
+  },
+  // HasLockContext types - valid patterns
+  {
+    name: 'HasLock3Context: Accept context [3]',
+    code: `
+import { createLockContext, LOCK_3, type HasLock3Context, type LockLevel } from 'src/core';
+function needsLock3<T extends readonly LockLevel[]>(
+  ctx: HasLock3Context<T> extends string ? never : HasLock3Context<T>
+): void {
+  // If this compiles, HasLock3Context<T> returned LockContext<T>
+  console.log('Using context');
+}
+async function test() {
+  const ctx3 = await createLockContext().acquireWrite(LOCK_3);
+  needsLock3(ctx3); // Valid: has LOCK_3
+  ctx3.dispose();
+}
+`
+  },
+  {
+    name: 'HasLock5Context: Accept context [1,3,5]',
+    code: `
+import { createLockContext, LOCK_1, LOCK_3, LOCK_5, type HasLock5Context, type LockLevel } from 'src/core';
+function needsLock5<T extends readonly LockLevel[]>(
+  ctx: HasLock5Context<T> extends string ? never : HasLock5Context<T>
+): void {
+  console.log('Using context');
+}
+async function test() {
+  const ctx135 = await createLockContext()
+    .acquireWrite(LOCK_1)
+    .then(c => c.acquireWrite(LOCK_3))
+    .then(c => c.acquireWrite(LOCK_5));
+  needsLock5(ctx135); // Valid: has LOCK_5
+  ctx135.dispose();
+}
+`
+  },
+  {
+    name: 'HasLock10Context: Accept context [10,12]',
+    code: `
+import { createLockContext, LOCK_10, LOCK_12, type HasLock10Context, type LockLevel } from 'src/core';
+function needsLock10<T extends readonly LockLevel[]>(
+  ctx: HasLock10Context<T> extends string ? never : HasLock10Context<T>
+): void {
+  console.log('Using context');
+}
+async function test() {
+  const ctx1012 = await createLockContext()
+    .acquireWrite(LOCK_10)
+    .then(c => c.acquireWrite(LOCK_12));
+  needsLock10(ctx1012); // Valid: has LOCK_10
+  ctx1012.dispose();
+}
+`
+  },
+  {
+    name: 'HasLock15Context: Accept context [15]',
+    code: `
+import { createLockContext, LOCK_15, type HasLock15Context, type LockLevel } from 'src/core';
+function needsLock15<T extends readonly LockLevel[]>(
+  ctx: HasLock15Context<T> extends string ? never : HasLock15Context<T>
+): void {
+  console.log('Using context');
+}
+async function test() {
+  const ctx15 = await createLockContext().acquireWrite(LOCK_15);
+  needsLock15(ctx15); // Valid: has LOCK_15
+  ctx15.dispose();
+}
+`
+  },
+  {
+    name: 'HasLock8Context: Accept context [5,8,10]',
+    code: `
+import { createLockContext, LOCK_5, LOCK_8, LOCK_10, type HasLock8Context, type LockLevel } from 'src/core';
+function needsLock8<T extends readonly LockLevel[]>(
+  ctx: HasLock8Context<T> extends string ? never : HasLock8Context<T>
+): void {
+  console.log('Using context');
+}
+async function test() {
+  const ctx5810 = await createLockContext()
+    .acquireWrite(LOCK_5)
+    .then(c => c.acquireWrite(LOCK_8))
+    .then(c => c.acquireWrite(LOCK_10));
+  needsLock8(ctx5810); // Valid: has LOCK_8
+  ctx5810.dispose();
+}
+`
+  },
+  // releaseLock - valid patterns
+  {
+    name: 'releaseLock: Release held lock LOCK_2 from context [1,2]',
+    code: `
+import { createLockContext, LOCK_1, LOCK_2 } from 'src/core';
+async function test() {
+  const ctx12 = await createLockContext().acquireWrite(LOCK_1).then(c => c.acquireWrite(LOCK_2));
+  const ctx1 = ctx12.releaseLock(LOCK_2); // Valid: LOCK_2 is held
+  ctx1.dispose();
+}
+`
+  },
+  {
+    name: 'releaseLock: Release middle lock from context [1,2,3]',
+    code: `
+import { createLockContext, LOCK_1, LOCK_2, LOCK_3 } from 'src/core';
+async function test() {
+  const ctx123 = await createLockContext()
+    .acquireWrite(LOCK_1)
+    .then(c => c.acquireWrite(LOCK_2))
+    .then(c => c.acquireWrite(LOCK_3));
+  const ctx13 = ctx123.releaseLock(LOCK_2); // Valid: release middle lock
+  ctx13.dispose();
+}
+`
+  },
+  {
+    name: 'releaseLock: Release first lock from context [1,2,3]',
+    code: `
+import { createLockContext, LOCK_1, LOCK_2, LOCK_3 } from 'src/core';
+async function test() {
+  const ctx123 = await createLockContext()
+    .acquireWrite(LOCK_1)
+    .then(c => c.acquireWrite(LOCK_2))
+    .then(c => c.acquireWrite(LOCK_3));
+  const ctx23 = ctx123.releaseLock(LOCK_1); // Valid: release first lock
+  ctx23.dispose();
+}
+`
+  },
+  {
+    name: 'releaseLock: Release last lock from context [1,2,3]',
+    code: `
+import { createLockContext, LOCK_1, LOCK_2, LOCK_3 } from 'src/core';
+async function test() {
+  const ctx123 = await createLockContext()
+    .acquireWrite(LOCK_1)
+    .then(c => c.acquireWrite(LOCK_2))
+    .then(c => c.acquireWrite(LOCK_3));
+  const ctx12 = ctx123.releaseLock(LOCK_3); // Valid: release last lock
+  ctx12.dispose();
+}
+`
+  },
+  {
+    name: 'releaseLock: Temporary lock elevation pattern',
+    code: `
+import { createLockContext, LOCK_1, LOCK_2, LOCK_3, LOCK_4 } from 'src/core';
+async function test() {
+  const ctx123 = await createLockContext()
+    .acquireWrite(LOCK_1)
+    .then(c => c.acquireWrite(LOCK_2))
+    .then(c => c.acquireWrite(LOCK_3));
+  const ctx1234 = await ctx123.acquireWrite(LOCK_4); // Elevate
+  const ctxBack = ctx1234.releaseLock(LOCK_4); // De-elevate
+  ctxBack.dispose();
+}
+`
+  },
+  {
+    name: 'releaseLock: Sequential releases',
+    code: `
+import { createLockContext, LOCK_1, LOCK_2, LOCK_3, LOCK_4, LOCK_5 } from 'src/core';
+async function test() {
+  const ctx12345 = await createLockContext()
+    .acquireWrite(LOCK_1)
+    .then(c => c.acquireWrite(LOCK_2))
+    .then(c => c.acquireWrite(LOCK_3))
+    .then(c => c.acquireWrite(LOCK_4))
+    .then(c => c.acquireWrite(LOCK_5));
+  const ctx1345 = ctx12345.releaseLock(LOCK_2);
+  const ctx135 = ctx1345.releaseLock(LOCK_4);
+  const ctx15 = ctx135.releaseLock(LOCK_3);
+  ctx15.dispose();
+}
+`
+  },
+  {
+    name: 'releaseLock: Works with read locks',
+    code: `
+import { createLockContext, LOCK_1, LOCK_2, LOCK_3 } from 'src/core';
+async function test() {
+  const ctx123R = await createLockContext()
+    .acquireRead(LOCK_1)
+    .then(c => c.acquireRead(LOCK_2))
+    .then(c => c.acquireRead(LOCK_3));
+  const ctx13R = ctx123R.releaseLock(LOCK_2);
+  ctx13R.dispose();
+}
+`
+  },
+  {
+    name: 'releaseLock: Works with mixed read/write locks',
+    code: `
+import { createLockContext, LOCK_1, LOCK_2, LOCK_3, LOCK_4 } from 'src/core';
+async function test() {
+  const ctxMixed = await createLockContext()
+    .acquireRead(LOCK_1)
+    .then(c => c.acquireWrite(LOCK_2))
+    .then(c => c.acquireRead(LOCK_3))
+    .then(c => c.acquireWrite(LOCK_4));
+  const ctx134 = ctxMixed.releaseLock(LOCK_2);
+  ctx134.dispose();
+}
+`
+  },
+  {
+    name: 'releaseLock: Works with high lock numbers',
+    code: `
+import { createLockContext, LOCK_10, LOCK_12, LOCK_15 } from 'src/core';
+async function test() {
+  const ctx101215 = await createLockContext()
+    .acquireWrite(LOCK_10)
+    .then(c => c.acquireWrite(LOCK_12))
+    .then(c => c.acquireWrite(LOCK_15));
+  const ctx1015 = ctx101215.releaseLock(LOCK_12);
+  ctx1015.dispose();
+}
+`
+  },
+  {
+    name: 'releaseLock: Release from skip pattern [1,3,5]',
+    code: `
+import { createLockContext, LOCK_1, LOCK_3, LOCK_5 } from 'src/core';
+async function test() {
+  const ctx135 = await createLockContext()
+    .acquireWrite(LOCK_1)
+    .then(c => c.acquireWrite(LOCK_3))
+    .then(c => c.acquireWrite(LOCK_5));
+  const ctx15 = ctx135.releaseLock(LOCK_3); // Valid: can release any held lock
+  ctx15.dispose();
 }
 `
   }

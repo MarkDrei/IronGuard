@@ -9,6 +9,8 @@
  * - Configurable lock levels (easily change from 5 to any number)
  */
 
+import type { MaxHeldLock, IronLocks } from './ironGuardTypes';
+
 // =============================================================================
 // CONFIGURATION SECTION - Easily configurable lock system
 // =============================================================================
@@ -234,10 +236,18 @@ type PrefixUpTo<T extends readonly unknown[], Target> =
       : readonly [First, ...PrefixUpTo<Rest, Target>]
     : readonly [];  // Target not found, return empty
 
+// Remove a specific element from an array (for releasing individual locks)
+type RemoveElement<T extends readonly unknown[], Target> =
+  T extends readonly [infer First, ...infer Rest]
+    ? First extends Target
+      ? Rest  // Found target, skip it and return the rest
+      : readonly [First, ...RemoveElement<Rest, Target>]
+    : readonly [];  // Target not found, return empty
+
 // Check if we can acquire a specific lock given current holdings
 // Rules: Can only acquire if lock is not held AND lock level > max currently held
 // Comprehensive logic for all 15 locks
-type CanAcquire<THeld extends readonly LockLevel[], TLock extends LockLevel> =
+type CanAcquireInternal<THeld extends IronLocks, TLock extends LockLevel> =
   Contains<THeld, TLock> extends true
     ? false  // Already held
     : THeld extends readonly []
@@ -278,116 +288,10 @@ type CanAcquire<THeld extends readonly LockLevel[], TLock extends LockLevel> =
                                       ? true : false
                                     : true;  // Fallback for edge cases
 
-/**
- * Generates all ordered subsequences maintaining the original order.
- *
- * This recursive type creates a union of all possible ordered subsequences (powerset)
- * from a tuple while preserving the ordering. This is more permissive than AllPrefixes
- * as it allows non-contiguous lock acquisition patterns.
- *
- * For example, given [1, 2, 3], it produces:
- * [] | [1] | [2] | [3] | [1, 2] | [1, 3] | [2, 3] | [1, 2, 3]
- *
- * This enables flexible lock acquisition patterns where locks can be skipped:
- * - Acquire lock 1, skip lock 2, acquire lock 3 → [1, 3]
- * - Skip lock 1, acquire lock 2 and 3 → [2, 3]
- * - Any ordered combination while maintaining deadlock prevention
- *
- * The key property is that order is preserved: if lock A comes before lock B in
- * the original sequence, and both are acquired, then A must be acquired before B.
- * This maintains the hierarchical ordering critical for deadlock prevention.
- *
- * Performance: O(2^N) complexity - generates 2^N combinations. Recommended for
- * use with lock levels ≤14 for optimal performance. Level 15 shows 93% overhead
- * increase (~2.2s vs ~1.1s).
- *
- * @example
- * ```typescript
- * // For SUPPORTED_LOCK_LEVELS = [1, 2, 3]
- * type FlexibleLockContexts = OrderedSubsequences<SUPPORTED_LOCK_LEVELS>;
- * // Produces: [] | [1] | [2] | [3] | [1,2] | [1,3] | [2,3] | [1,2,3]
- *
- * // Use in function signatures for maximum flexibility:
- * async function veryFlexibleFunction(
- *   context: LockContext<FlexibleLockContexts>
- * ): Promise<void> {
- *   // Function accepts ANY ordered lock combination
- * }
- * ```
- *
- * @template T - The tuple to generate ordered subsequences from (typically SUPPORTED_LOCK_LEVELS)
- * @see {@link doc/flexible-lock-types.md} for detailed usage guide and performance analysis
- */
-type OrderedSubsequences<T extends readonly number[]> =
-  T extends readonly [infer First, ...infer Rest extends readonly number[]]
-    ? OrderedSubsequences<Rest> | readonly [First, ...OrderedSubsequences<Rest>]
-    : readonly [];
 
 // =============================================================================
-// PRE-DEFINED FLEXIBLE LOCK CONTEXT TYPES
+// LOCK CONTEXT CLASS - Core of IronGuard system
 // =============================================================================
-
-/**
- * Pre-defined OrderedSubsequences types for common use cases.
- *
- * These types represent lock contexts that may hold any ordered combination
- * of locks up to the specified level. For example, LocksAtMost3 accepts:
- * [], [1], [2], [3], [1,2], [1,3], [2,3], [1,2,3]
- *
- * Use these in function parameters to accept flexible lock contexts:
- * ```typescript
- * async function pluginHook(ctx: LockContext<LocksAtMost5>): Promise<void> {
- *   // Accepts any ordered combination of locks 1-5
- * }
- * ```
- *
- * Note: Only levels 1-9 are pre-defined for optimal compilation performance.
- * Level 10 generates 1,024 combinations, level 14 generates 16,384 combinations.
- *
- * For levels 10 and above, create your own type alias:
- * ```typescript
- * type LocksAtMost10 = OrderedSubsequences<readonly [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]>;
- * ```
- *
- * Performance warning: Level 15 has significant compilation overhead (2x compile time).
- * Stay at level 14 or below for best performance.
- */
-
-/** Accepts any ordered combination of locks 1 (2 combinations) */
-type LocksAtMost1 = OrderedSubsequences<readonly [1]>;
-
-/** Accepts any ordered combination of locks 1-2 (4 combinations) */
-type LocksAtMost2 = OrderedSubsequences<readonly [1, 2]>;
-
-/** Accepts any ordered combination of locks 1-3 (8 combinations) */
-type LocksAtMost3 = OrderedSubsequences<readonly [1, 2, 3]>;
-
-/** Accepts any ordered combination of locks 1-4 (16 combinations) */
-type LocksAtMost4 = OrderedSubsequences<readonly [1, 2, 3, 4]>;
-
-/** Accepts any ordered combination of locks 1-5 (32 combinations) */
-type LocksAtMost5 = OrderedSubsequences<readonly [1, 2, 3, 4, 5]>;
-
-/** Accepts any ordered combination of locks 1-6 (64 combinations) */
-type LocksAtMost6 = OrderedSubsequences<readonly [1, 2, 3, 4, 5, 6]>;
-
-/** Accepts any ordered combination of locks 1-7 (128 combinations) */
-type LocksAtMost7 = OrderedSubsequences<readonly [1, 2, 3, 4, 5, 6, 7]>;
-
-/** Accepts any ordered combination of locks 1-8 (256 combinations) */
-type LocksAtMost8 = OrderedSubsequences<readonly [1, 2, 3, 4, 5, 6, 7, 8]>;
-
-/** Accepts any ordered combination of locks 1-9 (512 combinations) */
-type LocksAtMost9 = OrderedSubsequences<readonly [1, 2, 3, 4, 5, 6, 7, 8, 9]>;
-
-// Higher levels (10-15) are not pre-defined due to compilation performance impact:
-// - Level 10: 1,024 combinations (~1.1s compile time)
-// - Level 14: 16,384 combinations (~1.7s compile time)
-// - Level 15: 32,768 combinations (~2.2s compile time) ⚠️ Performance cliff
-//
-// To use higher levels, create your own type alias:
-// type LocksAtMost10 = OrderedSubsequences<readonly [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]>;
-// type LocksAtMost14 = OrderedSubsequences<readonly [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]>;
 
 class LockContext<THeldLocks extends readonly LockLevel[] = readonly []> {
   private heldLocks: THeldLocks;
@@ -403,7 +307,7 @@ class LockContext<THeldLocks extends readonly LockLevel[] = readonly []> {
 
   // Acquire a read lock - COMPILE-TIME ONLY enforcement with runtime read/write semantics
   async acquireRead<TLock extends LockLevel>(
-    lock: CanAcquire<THeldLocks, TLock> extends true ? TLock : never
+    lock: CanAcquireInternal<THeldLocks, TLock> extends true ? TLock : never
   ): Promise<LockContext<readonly [...THeldLocks, TLock]>> {
 
     // Runtime read lock acquisition
@@ -417,7 +321,7 @@ class LockContext<THeldLocks extends readonly LockLevel[] = readonly []> {
 
   // Acquire a write lock - COMPILE-TIME ONLY enforcement with runtime read/write semantics
   async acquireWrite<TLock extends LockLevel>(
-    lock: CanAcquire<THeldLocks, TLock> extends true ? TLock : never
+    lock: CanAcquireInternal<THeldLocks, TLock> extends true ? TLock : never
   ): Promise<LockContext<readonly [...THeldLocks, TLock]>> {
 
     // Runtime write lock acquisition
@@ -474,6 +378,39 @@ class LockContext<THeldLocks extends readonly LockLevel[] = readonly []> {
     return new LockContext(newLocks as unknown as PrefixUpTo<THeldLocks, TTarget>, newLockModes);
   }
 
+  // Release a specific lock - COMPILE-TIME ONLY enforcement
+  // This allows releasing individual locks while maintaining the others
+  // Useful for temporary lock elevation: acquire lock 4, use it, release lock 4
+  releaseLock<TLock extends LockLevel>(
+    lock: Contains<THeldLocks, TLock> extends true ? TLock : never
+  ): LockContext<RemoveElement<THeldLocks, TLock>> {
+    
+    // Find the lock
+    if (!this.heldLocks.includes(lock)) {
+      throw new Error(`Cannot release lock ${lock}: not held`);
+    }
+
+    // Release the lock with appropriate mode
+    const mode = this.lockModes.get(lock);
+    if (mode === 'read') {
+      this.manager.releaseReadLock(lock);
+    } else {
+      this.manager.releaseWriteLock(lock);
+    }
+
+    // Create new context without this lock
+    const newLocks = this.heldLocks.filter(l => l !== lock);
+    const newLockModes = new Map<LockLevel, LockMode>();
+    for (const heldLock of newLocks) {
+      const lockMode = this.lockModes.get(heldLock);
+      if (lockMode) {
+        newLockModes.set(heldLock, lockMode);
+      }
+    }
+
+    return new LockContext(newLocks as unknown as RemoveElement<THeldLocks, TLock>, newLockModes);
+  }
+
   // Check if a specific lock is held
   hasLock<TLock extends LockLevel>(
     lock: TLock
@@ -483,6 +420,11 @@ class LockContext<THeldLocks extends readonly LockLevel[] = readonly []> {
 
   getHeldLocks(): THeldLocks {
     return this.heldLocks;
+  }
+
+  // Get the maximum lock level currently held (0 if no locks held)
+  getMaxHeldLock(): number {
+    return this.heldLocks.length > 0 ? Math.max(...this.heldLocks) : 0;
   }
 
   // Release all locks held by this context (cleanup)
@@ -553,16 +495,6 @@ export type {
   LockLevel,
   LockMode,
   Contains,
-  CanAcquire,
-  OrderedSubsequences,
   PrefixUpTo,
-  LocksAtMost1,
-  LocksAtMost2,
-  LocksAtMost3,
-  LocksAtMost4,
-  LocksAtMost5,
-  LocksAtMost6,
-  LocksAtMost7,
-  LocksAtMost8,
-  LocksAtMost9
+  RemoveElement
 };

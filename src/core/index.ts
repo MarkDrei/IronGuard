@@ -30,18 +30,7 @@ export {
 export type {
   LockLevel,
   Contains,
-  CanAcquire,
   PrefixUpTo,
-  OrderedSubsequences,
-  LocksAtMost1,
-  LocksAtMost2,
-  LocksAtMost3,
-  LocksAtMost4,
-  LocksAtMost5,
-  LocksAtMost6,
-  LocksAtMost7,
-  LocksAtMost8,
-  LocksAtMost9
 } from './ironGuardSystem';
 
 // Advanced constraint types
@@ -51,20 +40,37 @@ export type {
   IsEmpty,
   MaxHeldLock,
 
-  // Can acquire types
-  CanAcquireLock1,
-  CanAcquireLock2,
-  CanAcquireLock3,
-  CanAcquireLock4,
-  CanAcquireLock5,
-  CanAcquireLock6,
-  CanAcquireLock7,
-  CanAcquireLock8,
-  CanAcquireLock9,
-  CanAcquireLock10,
-  CanAcquireLock11,
-  CanAcquireLock12,
-  CanAcquireLock13,
-  CanAcquireLock14,
-  CanAcquireLock15
+  LocksAtMost0,
+  LocksAtMost1,
+  LocksAtMost2,
+  LocksAtMost3,
+  LocksAtMost4,
+  LocksAtMost5,
+  LocksAtMost6,
+  LocksAtMost7,
+  LocksAtMost8,
+  LocksAtMost9,
+  NullableLocksAtMost10,
+  NullableLocksAtMost11,
+  NullableLocksAtMost12,
+  NullableLocksAtMost13,
+  NullableLocksAtMost14,
+  NullableLocksAtMost15,
+
+  // HasLock context types
+  HasLock1Context,
+  HasLock2Context,
+  HasLock3Context,
+  HasLock4Context,
+  HasLock5Context,
+  HasLock6Context,
+  HasLock7Context,
+  HasLock8Context,
+  HasLock9Context,
+  HasLock10Context,
+  HasLock11Context,
+  HasLock12Context,
+  HasLock13Context,
+  HasLock14Context,
+  HasLock15Context
 } from './ironGuardTypes';

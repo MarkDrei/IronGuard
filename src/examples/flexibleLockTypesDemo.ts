@@ -18,10 +18,13 @@ import {
   LOCK_2,
   LOCK_3,
   LOCK_4,
-  LOCK_5,
+  LOCK_5
+} from '../core/ironGuardSystem';
+
+import {
   type LocksAtMost4,
   type LocksAtMost5
-} from '../core/ironGuardSystem';
+} from '../core/ironGuardTypes';
 
 // =============================================================================
 // EXAMPLE 1: Complete Usage Pattern

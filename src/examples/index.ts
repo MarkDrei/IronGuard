@@ -27,8 +27,10 @@ import { demonstrateMutualExclusion } from './mutualExclusionDemo';
 import { demonstrateRollback } from './rollbackDemo';
 import { demonstrateFeatureCombinations } from './featureCombinationsDemo';
 import { runAllExamples as runReadWriteExamples } from './readWriteExamples';
+import './nullableLocksAcquisition';
 import { runContextTransferDemo } from './contextTransferDemo';
 import { runFlexibleLockTypesDemo } from './flexibleLockTypesDemo';
+import { runHasLockContextDemo } from './hasLockContextDemo';
 
 async function main(): Promise<void> {
   console.log('�️ IronGuard System\n');
@@ -88,6 +90,9 @@ async function main(): Promise<void> {
   
   // Flexible lock context types demo
   await runFlexibleLockTypesDemo();
+  
+  // HasLock context types demo
+  await runHasLockContextDemo();
   
   console.log('\n=== Key Benefits ===');
   console.log('✓ Runtime mutual exclusion (real thread safety)');
