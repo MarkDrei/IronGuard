@@ -31,6 +31,7 @@ import './nullableLocksAcquisition';
 import { runContextTransferDemo } from './contextTransferDemo';
 import { runFlexibleLockTypesDemo } from './flexibleLockTypesDemo';
 import { runHasLockContextDemo } from './hasLockContextDemo';
+import { runMarksExample } from './MarksExample';
 
 async function main(): Promise<void> {
   console.log('�️ IronGuard System\n');
@@ -93,6 +94,9 @@ async function main(): Promise<void> {
   
   // HasLock context types demo
   await runHasLockContextDemo();
+  
+  // Mark's compact feature overview
+  await runMarksExample();
   
   console.log('\n=== Key Benefits ===');
   console.log('✓ Runtime mutual exclusion (real thread safety)');
