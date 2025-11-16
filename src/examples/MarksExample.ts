@@ -41,7 +41,6 @@ export async function runMarksExample(): Promise<void> {
     await validPath();  
 }
 
-// Valid path: LOCK_1 → LOCK_3 → LOCK_7 (all ascending)
 async function validPath(): Promise<void> {
     const ctx_1 = await createLockContext().acquireWrite(LOCK_1);
     try {
@@ -64,11 +63,11 @@ async function validPath(): Promise<void> {
             await middleProcessor(ctx_1_3);
             console.log(`Step 1b <<< current locks: [${ctx_1.getHeldLocks()}]`);
         } finally {
-           ctx_1_3.dispose();
+           ctx_1_3.releaseLock(LOCK_3);
         }
     
     } finally {
-        ctx_1.dispose();
+        ctx_1.dispose(); // releass all locks
     }
 }
 
@@ -92,7 +91,16 @@ async function middleProcessor(context: LockContext<LocksAtMost5>): Promise<void
         
         console.log(`  Step 2 <<< current locks: [${withLock6.getHeldLocks()}]`);
     } finally {
-        withLock6.dispose();
+        // ❌ COMPILE-TIME ERROR: Uncommenting this would fail TypeScript compilation
+        // withLock6.releaseLock(LOCK_1); // cannot release LOCK_1, as this is not legal for all possible variants of held locks
+        // withLock6.releaseLock(LOCK_2); // cannot release LOCK_2, as this is not legal for all possible variants of held locks
+        // withLock6.releaseLock(LOCK_3); // cannot release LOCK_3, as this is not legal for all possible variants of held locks
+        // withLock6.releaseLock(LOCK_4); // cannot release LOCK_4, as this is not legal for all possible variants of held locks
+        // withLock6.releaseLock(LOCK_5); // cannot release LOCK_5, as this is not legal for all possible variants of held locks
+
+        withLock6.releaseLock(LOCK_6);
+
+
     }
 }
 
@@ -107,14 +115,14 @@ async function finalProcessor<THeld extends IronLocks>(
         console.log(`    step 3 >>> current locks: [${ctx.getHeldLocks()}]`);
         console.log(`    step 3 >>> max held lock: [${ctx.getMaxHeldLock()}]`);
 
-        // Check if we can actually acquire LOCK_11
-        if (ctx.getMaxHeldLock() <= 6) {
+        // Check if we can actually acquire LOCK_11. This is just paranoia, the type system already guarantees this.
+        if (ctx.getMaxHeldLock() <= 10) {
             const safeCtx = ctx as unknown as LockContext<readonly [10]>;
             const withLock11 = await safeCtx.acquireWrite(LOCK_11);
             try {
                 console.log(`    step 3 >>> acquired LOCK_11: [${withLock11.getHeldLocks()}]`);
             } finally {
-                withLock11.dispose();
+                withLock11.releaseLock(LOCK_11);
             } 
         }
     } // else case cannot happen unless user does unsafe casts
