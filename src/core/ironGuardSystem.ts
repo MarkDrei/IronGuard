@@ -466,73 +466,11 @@ class LockContext<THeldLocks extends readonly LockLevel[] = readonly []> {
   }
 
   /**
-   * Roll back to a previously acquired lock, releasing all locks acquired after it.
-   * 
-   * Creates a new context containing only locks up to and including the target lock.
-   * All locks acquired after the target are automatically released in the correct order.
-   * Useful for unwinding nested lock acquisitions while maintaining earlier locks.
-   * 
-   * Type-safe at compile-time: TypeScript validates the target lock is actually held.
-   * Runtime enforcement ensures proper cleanup and resource disposal.
-   * 
-   * @param targetLock - Lock level to roll back to (must be currently held)
-   * @returns New context with locks up to and including the target lock
-   * @throws {Error} If target lock is not held by this context
-   * 
-   * @example
-   * ```ts
-   * const ctx = await createLockContext()
-   *   .acquireWrite(LOCK_1)
-   *   .then(c => c.acquireWrite(LOCK_3))
-   *   .then(c => c.acquireWrite(LOCK_5));
-   * // ctx holds [1, 3, 5]
-   * 
-   * const rolled = ctx.rollbackTo(LOCK_3);
-   * // rolled holds [1, 3], LOCK_5 was released
-   * rolled.dispose(); // ⚠️ Invalidates rolled and ctx (both share locks 1, 3)
-   * ```
-   */
-  rollbackTo<TTarget extends LockLevel>(
-    targetLock: Contains<THeldLocks, TTarget> extends true ? TTarget : never
-  ): LockContext<PrefixUpTo<THeldLocks, TTarget>> {
-
-    // Find the index of the target lock
-    const targetIndex = this.heldLocks.indexOf(targetLock);
-    if (targetIndex === -1) {
-      throw new Error(`Cannot rollback to lock ${targetLock}: not held`);
-    }
-
-    // Identify locks to release (everything after the target)
-    const locksToRelease = this.heldLocks.slice(targetIndex + 1);
-
-    // Release the higher-level locks with appropriate mode
-    for (const lock of locksToRelease) {
-      const mode = this.lockModes.get(lock);
-      if (mode === 'read') {
-        this.manager.releaseReadLock(lock);
-      } else {
-        this.manager.releaseWriteLock(lock);
-      }
-    }
-
-    // Create new context with locks up to and including target
-    const newLocks = this.heldLocks.slice(0, targetIndex + 1);
-    const newLockModes = new Map<LockLevel, LockMode>();
-    for (const lock of newLocks) {
-      const mode = this.lockModes.get(lock);
-      if (mode) {
-        newLockModes.set(lock, mode);
-      }
-    }
-
-    return new LockContext(newLocks as unknown as PrefixUpTo<THeldLocks, TTarget>, newLockModes);
-  }
-
-  /**
    * Release a specific lock while maintaining all other held locks.
+   * Typically used to release the highest lock after temporary elevation.
    * 
    * Removes the specified lock from the context, creating a new context without it.
-   * Unlike rollbackTo, this releases a single lock regardless of position, allowing
+   * This releases a single lock regardless of position, allowing
    * flexible lock management patterns. Useful for temporary lock elevation where
    * you acquire a higher lock, use it briefly, then release just that lock.
    * 

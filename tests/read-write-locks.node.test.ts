@@ -284,26 +284,6 @@ describe('Read/Write Lock System', () => {
     });
   });
 
-  describe('Rollback with Read/Write Modes', () => {
-    test('should properly rollback mixed read/write locks', async () => {
-      const ctx1 = await createLockContext().acquireRead(LOCK_1);
-      const ctx2 = await ctx1.acquireWrite(LOCK_3);
-      const ctx3 = await ctx2.acquireRead(LOCK_5);
-
-      // Rollback to LOCK_3
-      const rolledBack = ctx3.rollbackTo(LOCK_3);
-
-      assert(rolledBack.hasLock(LOCK_1));
-      assert(rolledBack.hasLock(LOCK_3));
-      assert(!rolledBack.hasLock(LOCK_5));
-
-      assert.strictEqual(rolledBack.getLockMode(LOCK_1), 'read');
-      assert.strictEqual(rolledBack.getLockMode(LOCK_3), 'write');
-
-      rolledBack.dispose();
-    });
-  });
-
   describe('Compile-Time Validation Preservation', () => {
     test('should preserve compile-time lock ordering for read locks', async () => {
       // ❌ Compile-time errors: These would fail TypeScript compilation

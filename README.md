@@ -1,6 +1,6 @@
 # 🛡️ IronGuard
 
-TypeScript compile-time lock order violation detection system with runtime mutual exclusion and advanced rollback functionality. Prevents both deadlocks (through compile-time validation) and race conditions (through async mutual exclusion).
+Unbreakable TypeScript compile-time lock order violation detection system with runtime mutual exclusion. Prevents both deadlocks (through compile-time validation) and race conditions (through async mutual exclusion).
 
 ## Installation
 
@@ -14,34 +14,22 @@ npm install @markdrei/ironguard-typescript-locks
 import { 
   createLockContext, 
   LOCK_1, 
-  LOCK_2,
-  type Contains,
-  type LockContext,
-  type LockLevel
+  LOCK_3,
+  type LockContext
 } from '@markdrei/ironguard-typescript-locks';
 
-// Function requires LOCK_2 to be held - enforced at compile-time!
-async function processData<T extends readonly LockLevel[]>(
-  ctx: Contains<T, 2> extends true ? LockContext<T> : never
-): Promise<void> {
-  // ... your critical section logic here ...
-  ctx.useLock(LOCK_2, () => {
-    // Access protected resource
-  });
-}
-
-// Usage
+// Basic lock acquisition with automatic cleanup
 async function example(): Promise<void> {
-  const ctx = await createLockContext().acquireWrite(LOCK_1);
-  const ctx2 = await ctx.acquireWrite(LOCK_2);
+  const ctx0 = createLockContext();
   
-  // ✅ This works - LOCK_2 is held
-  await processData(ctx2);
-  
-  // ❌ This would fail at compile-time:
-  // await processData(ctx); // Does not have LOCK_2
-  
-  ctx2.dispose();
+  await ctx0.useLockWithAcquire(LOCK_1, async (ctx1) => {
+    console.log(`Holding: [${ctx1.getHeldLocks()}]`); // [1]
+    
+    await ctx1.useLockWithAcquire(LOCK_3, async (ctx13) => {
+      console.log(`Holding: [${ctx13.getHeldLocks()}]`); // [1, 3]
+      // Use locks here
+    }); // LOCK_3 auto-released
+  }); // LOCK_1 auto-released
 }
 ```
 
@@ -51,31 +39,32 @@ async function example(): Promise<void> {
 - **Runtime thread safety**: Async mutual exclusion prevents race conditions  
 - **Read/write lock semantics**: Concurrent readers with writer preference
 - **Context transfer validation**: Type-safe function parameters with lock requirements
-- **Flexible lock patterns**: Sequential acquisition, lock skipping, function constraints
-- **15 lock levels supported**: LOCK_1 through LOCK_15 available (no configuration required)
-- **Advanced rollback functionality**: Partial lock release with compile-time validation
+- **Flexible lock patterns**: Sequential acquisition, lock skipping, temporary elevation
+- **15 lock levels supported**: LOCK_1 through LOCK_15 available
 - **Production-ready**: Clean API, comprehensive testing, proper resource management
 
-## Enhanced Features
+## Core Features
 
-### Rollback Functionality
-Roll back to previously held locks while maintaining type safety:
+### Manual Lock Management
+
+For fine-grained control, acquire and release locks explicitly:
 
 ```typescript
-// Acquire locks 1, 3, 5
-const ctx135 = await createLockContext()
-  .acquireWrite(LOCK_1)
-  .then(c => c.acquireWrite(LOCK_3))
-  .then(c => c.acquireWrite(LOCK_5));
-
-// Rollback to LOCK_3 (releases LOCK_5)
-const ctx13 = ctx135.rollbackTo(LOCK_3);
-
-// Now can acquire LOCK_4
-const ctx134 = await ctx13.acquireWrite(LOCK_4);
+const ctx1 = await createLockContext().acquireWrite(LOCK_1);
+try {
+  const ctx13 = await ctx1.acquireWrite(LOCK_3);
+  try {
+    // Use locks here
+  } finally {
+    ctx13.releaseLock(LOCK_3); // Release only LOCK_3
+  }
+} finally {
+  ctx1.releaseLock(LOCK_1); // Release only LOCK_1
+}
 ```
 
 ### Read/Write Lock Semantics
+
 Full read/write lock support with concurrent readers and writer preference:
 
 ```typescript
@@ -83,56 +72,50 @@ Full read/write lock support with concurrent readers and writer preference:
 const reader1 = await createLockContext().acquireRead(LOCK_3);
 const reader2 = await createLockContext().acquireRead(LOCK_3);  // ✅ Concurrent
 
-// Writers get priority and wait for readers to finish
-const writer = await createLockContext().acquireWrite(LOCK_3);  // ⏳ Waits
+// Writers get priority over new readers
+const writer = await createLockContext().acquireWrite(LOCK_3);  // ⏳ Waits for readers
 ```
 
-### Context Transfer with Compile-Time Validation
-Type-safe function parameters with constraint types:
+### Context Transfer with Type Safety
+
+Pass lock contexts between functions with compile-time validation:
 
 ```typescript
-// Building block for type constraints
-type Contains<T, Level> = /* checks if Level is in T */;
+import type { LocksAtMost5, HasLock3Context } from '@markdrei/ironguard-typescript-locks';
 
-// Function that requires LOCK_3 to be held
-function processData<THeld extends readonly LockLevel[]>(
-  ctx: Contains<THeld, 3> extends true ? LockContext<THeld> : never
-): string {
-  // TypeScript guarantees LOCK_3 is held - compile-time safety
-  return `Processing with: ${ctx.toString()}`;
+// Accepts any ordered combination of locks 1-5
+async function middleProcessor(context: LockContext<LocksAtMost5>): Promise<void> {
+  // Can acquire locks > 5
+  const withLock6 = await context.acquireWrite(LOCK_6);
+  try {
+    // Use locks
+  } finally {
+    withLock6.releaseLock(LOCK_6);
+  }
 }
 
-// ✅ Valid scenarios:
-const ctx3 = await createLockContext().acquireRead(LOCK_3);  // Has LOCK_3
-processData(ctx3);
-
-const ctx123 = await createLockContext()
-  .acquireRead(LOCK_1)
-  .then(c => c.acquireRead(LOCK_2))
-  .then(c => c.acquireRead(LOCK_3));  // Has LOCK_3 among others
-processData(ctx123);
-
-// ❌ Compile error: does not have LOCK_3
-const ctx1 = await createLockContext().acquireRead(LOCK_1);
-// processData(ctx1); // Compile-time error
-```
-
-### Flexible Lock Context Types
-Use OrderedSubsequences for maximum flexibility:
-
-```typescript
-// Function accepts any ordered lock combination
-type LocksAtMost3 = OrderedSubsequences<readonly [1, 2, 3]>;
-async function flexibleFunction(ctx: LockContext<LocksAtMost3>): Promise<void> {
-  // Accepts: [], [1], [2], [3], [1,2], [1,3], [2,3], [1,2,3]
+// Requires LOCK_3 to be held
+function processData<THeld extends IronLocks>(
+  ctx: HasLock3Context<THeld>
+): void {
+  ctx.useLock(LOCK_3, () => {
+    // TypeScript guarantees LOCK_3 is present
+  });
 }
 ```
 
-**Building Blocks Available:**
-- `HasLock<THeld, Level>` - Checks if a specific lock is held
-- `Contains<T, Level>` - Type-safe lock presence checking
-- `OrderedSubsequences<T>` - Generates all valid lock combinations
-- Easy to extend: Adding new lock levels requires minimal code
+### Flexible Lock Types
+
+```typescript
+// Pre-defined types for locks 1-9
+import type { LocksAtMost1, LocksAtMost5, LocksAtMost9 } from '@markdrei/ironguard-typescript-locks';
+
+// Nullable types for locks 10-15 (performance optimization)
+import type { NullableLocksAtMost10, NullableLocksAtMost15 } from '@markdrei/ironguard-typescript-locks';
+
+// Ensure specific locks are held
+import type { HasLock3Context, HasLock11Context } from '@markdrei/ironguard-typescript-locks';
+```
 
 ## What's Missing
 
@@ -140,55 +123,22 @@ async function flexibleFunction(ctx: LockContext<LocksAtMost3>): Promise<void> {
 - Lock timeout/cancellation mechanisms
 - Lock priority/scheduling policies
 
-## Project Structure
-
-- `src/core/` - Core IronGuard system and type definitions
-- `src/examples/` - Usage demonstrations and patterns including rollback
-- `tests/` - Comprehensive test suite with custom runner (7 runtime + 31 compile-time tests)
-- `doc/` - Documentation and guides
-
 ## Commands
 
 ```bash
-# See IronGuard in action with various lock patterns
+# See IronGuard in action
 npm run examples
 
-# Run specific example demos
-npm run examples:flexible    # Flexible lock 3 function demo
-npm run examples:violations  # Compile-time violation detection demo
-npm run examples:mutex       # Two-thread mutual exclusion demo
-npm run examples:rollback    # Advanced rollback functionality demo
-npm run examples:combinations # Feature combinations demo
-npm run examples:readwrite   # Read/write lock demonstrations
-npm run examples:context     # Context transfer with compile-time validation
+# Run all tests
+npm test
 
-# Run all tests (runtime + compile-time validation)
-npm run test:all
-
-# Run runtime tests only (8/8 passing)
-npm run test
-
-# Run compile-time validation tests only (31/31 passing)
+# Run compile-time validation tests
 npm run test:compile
 
-# Build TypeScript to JavaScript
+# Build the project
 npm run build
 ```
 
-## System Status
-
-**✅ Fully Enhanced**: 15-lock system with read/write locks, context transfer, and rollback functionality
-**✅ All Tests Passing**: 9 runtime + 31 compile-time validation tests
-**✅ Complete Type Safety**: Lock ordering, duplicates, rollback, read/write modes, and context validation
-**✅ Production Ready**: Comprehensive examples and documentation
-
-## Feature Combinations Tested
-
-- **Rollback + Mutual Exclusion**: Rollback operations release locks for waiting threads
-- **Rollback + High Lock Levels**: All 15 lock levels work correctly with rollback
-- **Rollback + Lock Skipping**: Rollback works with non-sequential lock acquisition
-- **Rollback + Function Parameters**: Type constraints work after rollback operations
-- **Complex Multi-Feature Scenarios**: Multiple threads with concurrent rollback operations
 
 ## Documentation
 
@@ -196,3 +146,7 @@ npm run build
 - **[Lock Context Transfer Patterns](doc/context-transfer-patterns.md)** - Guide to passing contexts between functions using LocksAtMost and NullableLocksAtMost types
 - **[Read/Write Lock Best Practices](doc/read-write-best-practices.md)** - Concurrent readers and writer preference
 - **[Compile-time Testing Guide](doc/compile-time-testing.md)** - How to validate TypeScript lock safety
+
+## License
+
+MIT

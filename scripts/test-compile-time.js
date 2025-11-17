@@ -123,47 +123,6 @@ async function test() {
 }
 `
   },
-  // ❌ Rollback to non-held lock
-  {
-    name: 'Rollback to non-held lock: LOCK_2',
-    code: `
-import { createLockContext, LOCK_1, LOCK_2, LOCK_3 } from 'src/core';
-async function test() {
-  const ctx13 = await createLockContext().acquireWrite(LOCK_1).then(c => c.acquireWrite(LOCK_3));
-  const invalid = ctx13.rollbackTo(LOCK_2); // Should fail: LOCK_2 not held
-}
-`
-  },
-  {
-    name: 'Rollback to higher lock: LOCK_5',
-    code: `
-import { createLockContext, LOCK_1, LOCK_3, LOCK_5 } from 'src/core';
-async function test() {
-  const ctx13 = await createLockContext().acquireWrite(LOCK_1).then(c => c.acquireWrite(LOCK_3));
-  const invalid = ctx13.rollbackTo(LOCK_5); // Should fail: LOCK_5 not held
-}
-`
-  },
-  {
-    name: 'Rollback on empty context',
-    code: `
-import { createLockContext, LOCK_1 } from 'src/core';
-async function test() {
-  const empty = createLockContext();
-  const invalid = empty.rollbackTo(LOCK_1); // Should fail: no locks held
-}
-`
-  },
-  {
-    name: 'Rollback to skipped lock',
-    code: `
-import { createLockContext, LOCK_1, LOCK_2, LOCK_5 } from 'src/core';
-async function test() {
-  const ctx15 = await createLockContext().acquireWrite(LOCK_1).then(c => c.acquireWrite(LOCK_5));
-  const invalid = ctx15.rollbackTo(LOCK_2); // Should fail: LOCK_2 skipped, not held
-}
-`
-  },
   {
     name: 'High lock ordering violation: LOCK_15 → LOCK_6',
     code: `

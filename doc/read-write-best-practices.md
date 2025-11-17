@@ -75,7 +75,7 @@ const ctx = await createLockContext()
   .acquireRead(INDEX_LOCK);     // Read index information
 ```
 
-### 3. Lock Rollback with Modes
+### 3. Individual Lock Release with Modes
 
 ```typescript
 const ctx = await createLockContext()
@@ -83,9 +83,9 @@ const ctx = await createLockContext()
   .acquireWrite(LOCK_3)
   .acquireRead(LOCK_5);
 
-// Rollback preserves lock modes
-const rolled = ctx.rollbackTo(LOCK_3);
-// rolled still has: LOCK_1 (read) and LOCK_3 (write)
+// Release individual lock while preserving others
+const without5 = ctx.releaseLock(LOCK_5);
+// without5 still has: LOCK_1 (read) and LOCK_3 (write)
 ```
 
 ## Runtime Behavior

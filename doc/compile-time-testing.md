@@ -25,14 +25,13 @@ The automated script (`scripts/test-compile-time.js`) creates temporary TypeScri
 - **Duplicates**: LOCK_1 twice, LOCK_3 twice, high lock duplicates  
 - **Usage**: Using non-held locks, empty context violations
 - **Parameters**: Invalid function parameter constraints, missing required locks
-- **Rollback**: Rollback to non-held locks, invalid rollback operations
 - **High Locks**: LOCK_6 through LOCK_15 ordering and duplication violations
 - **Context Transfer**: Invalid context passing to functions with lock requirements
 
 ### Current Status
-- **21 negative tests**: Invalid patterns that should fail compilation
+- **17 negative tests**: Invalid patterns that should fail compilation
 - **10 positive tests**: Valid code patterns to verify testing infrastructure  
-- **Total**: 31/31 tests passing ✅
+- **Total**: 27/27 tests passing ✅
 
 ## Adding New Tests
 

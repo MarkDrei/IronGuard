@@ -24,7 +24,6 @@ import {
 
 import { demonstrateCompileTimeViolations } from './compileTimeViolations';
 import { demonstrateMutualExclusion } from './mutualExclusionDemo';
-import { demonstrateRollback } from './rollbackDemo';
 import { demonstrateFeatureCombinations } from './featureCombinationsDemo';
 import { runAllExamples as runReadWriteExamples } from './readWriteExamples';
 import './nullableLocksAcquisition';
@@ -48,9 +47,6 @@ async function main(): Promise<void> {
   
   // Mutual exclusion demo
   await demonstrateMutualExclusion();
-  
-  // Rollback functionality demo
-  await demonstrateRollback();
   
   // Feature combinations demo
   await demonstrateFeatureCombinations();
@@ -77,7 +73,6 @@ async function main(): Promise<void> {
   console.log('✓ Runtime mutual exclusion (real thread safety)');
   console.log('✓ Compile-time lock ordering validation (deadlock prevention)');
   console.log('✓ Flexible lock acquisition patterns');
-  console.log('✓ Advanced rollback functionality');
   console.log('✓ Type-safe function parameter constraints');
   console.log('✓ Context transfer between functions with compile-time validation');
   console.log('✓ Read/write lock semantics with concurrent readers');
