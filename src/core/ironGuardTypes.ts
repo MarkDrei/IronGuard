@@ -10,7 +10,9 @@
  * - Reusable constraint patterns for different lock combinations
  *
  * Building blocks:
- * TODO update
+ * - HasLock<THeld, Level>: Checks if a specific lock level is held
+ * - IsEmpty<THeld>: Checks if the context has no locks
+ * - MaxHeldLock<THeld>: Returns the highest lock level currently held
  */
 
 import type { LockContext, Contains, LockLevel } from './ironGuardSystem';
@@ -333,7 +335,7 @@ export type {
   HasLock12Context,
   HasLock13Context,
   HasLock14Context,
-  HasLock15Context, 
+  HasLock15Context,
 
   // LocksAtMost types
   LocksAtMost0,
