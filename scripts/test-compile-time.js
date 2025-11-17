@@ -431,6 +431,121 @@ async function test() {
   needsLock8(empty); // Should fail: doesn't have LOCK_8
 }
 `
+  },
+  // useLock - invalid patterns
+  {
+    name: 'useLock: Cannot use non-held lock LOCK_2 from context [1]',
+    code: `
+import { createLockContext, LOCK_1, LOCK_2 } from 'src/core';
+async function test() {
+  const ctx1 = await createLockContext().acquireWrite(LOCK_1);
+  ctx1.useLock(LOCK_2, () => {}); // Should fail: LOCK_2 not held
+}
+`
+  },
+  {
+    name: 'useLock: Cannot use LOCK_5 from context [1,3]',
+    code: `
+import { createLockContext, LOCK_1, LOCK_3, LOCK_5 } from 'src/core';
+async function test() {
+  const ctx13 = await createLockContext().acquireWrite(LOCK_1).then(c => c.acquireWrite(LOCK_3));
+  ctx13.useLock(LOCK_5, () => {}); // Should fail: LOCK_5 not held
+}
+`
+  },
+  {
+    name: 'useLock: Cannot use LOCK_1 from empty context',
+    code: `
+import { createLockContext, LOCK_1 } from 'src/core';
+async function test() {
+  const empty = createLockContext();
+  empty.useLock(LOCK_1, () => {}); // Should fail: no locks held
+}
+`
+  },
+  {
+    name: 'useLock: Cannot use LOCK_10 from context [5,8]',
+    code: `
+import { createLockContext, LOCK_5, LOCK_8, LOCK_10 } from 'src/core';
+async function test() {
+  const ctx58 = await createLockContext().acquireWrite(LOCK_5).then(c => c.acquireWrite(LOCK_8));
+  ctx58.useLock(LOCK_10, () => {}); // Should fail: LOCK_10 not held
+}
+`
+  },
+  {
+    name: 'useLock: Cannot use skipped lock LOCK_2 from context [1,3]',
+    code: `
+import { createLockContext, LOCK_1, LOCK_2, LOCK_3 } from 'src/core';
+async function test() {
+  const ctx13 = await createLockContext().acquireWrite(LOCK_1).then(c => c.acquireWrite(LOCK_3));
+  ctx13.useLock(LOCK_2, () => {}); // Should fail: LOCK_2 was skipped
+}
+`
+  },
+  // useLockWithAcquire - invalid patterns
+  {
+    name: 'useLockWithAcquire: Cannot acquire lower lock LOCK_1 from context [3]',
+    code: `
+import { createLockContext, LOCK_1, LOCK_3 } from 'src/core';
+async function test() {
+  const ctx3 = await createLockContext().acquireWrite(LOCK_3);
+  await ctx3.useLockWithAcquire(LOCK_1, async () => {}); // Should fail: 3 → 1 violates order
+}
+`
+  },
+  {
+    name: 'useLockWithAcquire: Cannot acquire LOCK_2 from context [5]',
+    code: `
+import { createLockContext, LOCK_2, LOCK_5 } from 'src/core';
+async function test() {
+  const ctx5 = await createLockContext().acquireWrite(LOCK_5);
+  await ctx5.useLockWithAcquire(LOCK_2, async () => {}); // Should fail: 5 → 2 violates order
+}
+`
+  },
+  {
+    name: 'useLockWithAcquire: Cannot acquire duplicate lock LOCK_3',
+    code: `
+import { createLockContext, LOCK_3 } from 'src/core';
+async function test() {
+  const ctx3 = await createLockContext().acquireWrite(LOCK_3);
+  await ctx3.useLockWithAcquire(LOCK_3, async () => {}); // Should fail: duplicate acquisition
+}
+`
+  },
+  {
+    name: 'useLockWithAcquire: Cannot acquire LOCK_4 from context [1,4]',
+    code: `
+import { createLockContext, LOCK_1, LOCK_4 } from 'src/core';
+async function test() {
+  const ctx14 = await createLockContext().acquireWrite(LOCK_1).then(c => c.acquireWrite(LOCK_4));
+  await ctx14.useLockWithAcquire(LOCK_4, async () => {}); // Should fail: duplicate
+}
+`
+  },
+  {
+    name: 'useLockWithAcquire: Cannot acquire LOCK_8 from context [2,10]',
+    code: `
+import { createLockContext, LOCK_2, LOCK_8, LOCK_10 } from 'src/core';
+async function test() {
+  const ctx210 = await createLockContext().acquireWrite(LOCK_2).then(c => c.acquireWrite(LOCK_10));
+  await ctx210.useLockWithAcquire(LOCK_8, async () => {}); // Should fail: 10 → 8 violates order
+}
+`
+  },
+  {
+    name: 'useLockWithAcquire: Cannot acquire LOCK_1 from context [2,5,8]',
+    code: `
+import { createLockContext, LOCK_1, LOCK_2, LOCK_5, LOCK_8 } from 'src/core';
+async function test() {
+  const ctx258 = await createLockContext()
+    .acquireWrite(LOCK_2)
+    .then(c => c.acquireWrite(LOCK_5))
+    .then(c => c.acquireWrite(LOCK_8));
+  await ctx258.useLockWithAcquire(LOCK_1, async () => {}); // Should fail: 2,5,8 → 1
+}
+`
   }
 ];
 

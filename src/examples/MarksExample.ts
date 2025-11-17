@@ -35,10 +35,16 @@ import type {
 
 export async function runMarksExample(): Promise<void> {
     console.log('\n╔══════════════════════════════════════╗');
-    console.log('║   IronGuard Feature Overview Demo   ║');
+    console.log('║   IronGuard Feature Overview Demo    ║');
     console.log('╚══════════════════════════════════════╝');
     
     await validPath();
+
+     console.log('\n╔══════════════════════════════════════╗');
+    console.log('║           useLock version            ║');
+    console.log('╚══════════════════════════════════════╝');
+
+    await validPathWithUseLockPattern();
 }
 
 async function validPath(): Promise<void> {
@@ -99,8 +105,6 @@ async function middleProcessor(context: LockContext<LocksAtMost5>): Promise<void
         // withLock6.releaseLock(LOCK_5); // cannot release LOCK_5, as this is not legal for all possible variants of held locks
 
         withLock6.releaseLock(LOCK_6);
-
-
     }
 }
 
@@ -126,6 +130,36 @@ async function finalProcessor<THeld extends IronLocks>(
             } 
         }
     } // else case cannot happen unless user does unsafe casts
+}
+
+async function validPathWithUseLockPattern(): Promise<void> {
+    const ctx0 = createLockContext();
+
+    await ctx0.useLockWithAcquire(LOCK_1, async (ctx1) => {
+        console.log(`Step 1a (useLock) >>> current locks: [${ctx1.getHeldLocks()}]`);
+        await ctx1.useLockWithAcquire(LOCK_3, async (ctx1_3) => {
+            console.log(`  Step 1b (useLock) >>> current locks: [${ctx1_3.getHeldLocks()}]`);
+            await middleProcessorUseLock(ctx1_3);
+            }
+        );
+        console.log(`Step 1a (useLock) <<< current locks: [${ctx1.getHeldLocks()}]`);
+
+    });
+}
+
+async function middleProcessorUseLock(context: LockContext<LocksAtMost5>): Promise<void> {
+    // ❌ COMPILE-TIME ERROR: Uncommenting this would fail TypeScript compilation
+    // context.useLockWithAcquire(LOCK_1, (ctx) => {}); // cannot acquire LOCK_1 - LOCK_5
+    // context.useLockWithAcquire(LOCK_2, (ctx) => {}); // cannot acquire LOCK_1 - LOCK_5
+    // context.useLockWithAcquire(LOCK_3, (ctx) => {}); // cannot acquire LOCK_1 - LOCK_5
+    // context.useLockWithAcquire(LOCK_4, (ctx) => {}); // cannot acquire LOCK_1 - LOCK_5
+    // context.useLockWithAcquire(LOCK_5, (ctx) => {}); // cannot acquire LOCK_1 - LOCK_5
+
+    await context.useLockWithAcquire(LOCK_6, async (withLock6) => {
+        console.log(`  Step 2 (useLock) >>> current locks: [${withLock6.getHeldLocks()}]`);
+        await finalProcessor(withLock6);
+        console.log(`  Step 2 (useLock) <<< current locks: [${withLock6.getHeldLocks()}]`);
+    });
 }
 
 
