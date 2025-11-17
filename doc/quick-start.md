@@ -119,7 +119,56 @@ const ctx135 = await ctx1.acquireWrite(LOCK_3).then(c => c.acquireWrite(LOCK_5))
 await middleProcessor(ctx135); // ✅ [1,3,5] is in LocksAtMost5
 ```
 
-### 5. Complete Example Flow
+### 5. Ensuring Specific Locks Are Held (HasLockXContext)
+
+Sometimes you need to ensure a function is only called when a specific lock is already held. Use `HasLockXContext` types:
+
+```typescript
+import type { HasLock3Context, HasLock11Context } from './src/core';
+
+// This function requires LOCK_3 to be held by the caller
+function processData<THeld extends IronLocks>(
+  ctx: HasLock3Context<THeld>
+): void {
+  // TypeScript guarantees LOCK_3 is present
+  ctx.useLock(LOCK_3, () => {
+    console.log('Processing with LOCK_3');
+    // Can safely access resources protected by LOCK_3
+  });
+}
+
+// This function requires LOCK_11 to be held
+async function criticalOperation<THeld extends IronLocks>(
+  ctx: HasLock11Context<THeld>
+): Promise<void> {
+  // TypeScript guarantees LOCK_11 is present
+  if (ctx.hasLock(LOCK_11)) {
+    console.log('Performing critical operation');
+    // Work with LOCK_11 protected resources
+  }
+}
+
+// Usage examples
+const ctx3 = await createLockContext().acquireWrite(LOCK_3);
+processData(ctx3); // ✅ Compiles - LOCK_3 is held
+
+const ctx1 = await createLockContext().acquireWrite(LOCK_1);
+// processData(ctx1); // ❌ Compile error - LOCK_3 not held
+
+const ctx11 = await createLockContext().acquireWrite(LOCK_11);
+await criticalOperation(ctx11); // ✅ Compiles
+
+const ctx13 = await ctx1.acquireWrite(LOCK_3);
+processData(ctx13); // ✅ Also works - LOCK_3 is held (along with LOCK_1)
+```
+
+**When to use HasLockXContext**:
+- You need compile-time guarantee that a specific lock is held
+- The function doesn't acquire locks itself, just uses existing ones
+- You want to enforce lock requirements for critical operations
+- You don't care what other locks are held
+
+### 6. Complete Example Flow
 
 Combining all patterns from MarksExample.ts:
 
@@ -158,7 +207,24 @@ async function finalProcessor<THeld extends IronLocks>(
   if (ctx !== null) {
     // Context has locks ≤10, can acquire higher locks
     console.log(`Final: [${ctx.getHeldLocks()}]`);
+    
+    // Acquire LOCK_11 and use HasLock11Context function
+    if (ctx.getMaxHeldLock() <= 10) {
+      const safeCtx = ctx as unknown as LockContext<readonly [10]>;
+      const withLock11 = await safeCtx.acquireWrite(LOCK_11);
+      try {
+        await criticalOperation(withLock11); // Requires LOCK_11
+      } finally {
+        withLock11.releaseLock(LOCK_11);
+      }
+    }
   }
+}
+
+async function criticalOperation<THeld extends IronLocks>(
+  ctx: HasLock11Context<THeld>
+): Promise<void> {
+  console.log('Critical operation with LOCK_11');
 }
 ```
 
@@ -308,7 +374,8 @@ await Promise.all([thread1(), thread2()]);
 3. **Avoid `dispose()`** unless you're done with the entire lock chain
 4. **Use `LocksAtMost` types** (1-9) for flexible function parameters
 5. **Use `NullableLocksAtMost` types** (10-15) as a fallback for higher lock levels
-6. **Always clean up locks** in finally blocks or with automatic patterns
+6. **Use `HasLockXContext` types** when functions require specific locks to be held
+7. **Always clean up locks** in finally blocks or with automatic patterns
 
 ## Testing Your Code
 

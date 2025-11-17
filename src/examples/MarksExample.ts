@@ -26,6 +26,7 @@ import {
     LOCK_11
 } from '../core/ironGuardSystem';
 import type {
+    HasLock11Context,
     IronLocks,
     LocksAtMost5,
     NullableLocksAtMost10
@@ -94,7 +95,11 @@ async function middleProcessor(context: LockContext<LocksAtMost5>): Promise<void
         console.log(`  Step 2 >>> current locks: [${withLock6.getHeldLocks()}]`);
         
         await finalProcessor(withLock6);
-        
+
+        // ❌ COMPILE-TIME ERROR: Uncommenting this would fail TypeScript compilation
+        // hasLockExample(context)
+        // hasLockExample(withLock6)
+
         console.log(`  Step 2 <<< current locks: [${withLock6.getHeldLocks()}]`);
     } finally {
         // ❌ COMPILE-TIME ERROR: Uncommenting this would fail TypeScript compilation
@@ -125,11 +130,23 @@ async function finalProcessor<THeld extends IronLocks>(
             const withLock11 = await safeCtx.acquireWrite(LOCK_11);
             try {
                 console.log(`    step 3 >>> acquired LOCK_11: [${withLock11.getHeldLocks()}]`);
+                hasLockExample(withLock11);
+
+                // ❌ COMPILE-TIME ERROR: Uncommenting this would fail TypeScript compilation
+                // hasLockExample(safeCtx)
             } finally {
                 withLock11.releaseLock(LOCK_11);
             } 
         }
     } // else case cannot happen unless user does unsafe casts
+}
+
+function hasLockExample<THeld extends IronLocks>(context: HasLock11Context<THeld>) : void {
+    if (context.hasLock(LOCK_11)) {
+        console.log('    ✓ Context has LOCK_11');
+    } else {
+        // This case should not if the code compiles
+    }   
 }
 
 async function validPathWithUseLockPattern(): Promise<void> {

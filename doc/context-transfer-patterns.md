@@ -4,9 +4,10 @@
 
 IronGuard provides flexible type patterns for passing lock contexts between functions as parameters. This enables writing modular code where functions can accept lock contexts in various states while maintaining compile-time deadlock prevention.
 
-This guide covers two complementary approaches:
+This guide covers three complementary approaches:
 1. **LocksAtMost Types** (1-9): For accepting any ordered combination of locks
 2. **NullableLocksAtMost Types** (10-15): For validating maximum lock levels
+3. **HasLockXContext Types** (1-15): For ensuring specific locks are held
 
 ## LocksAtMost Types: Flexible Lock Acceptance
 
@@ -328,14 +329,124 @@ async function workflow(): Promise<void> {
 
 **Guideline**: Use `LocksAtMost` for locks 1-9, `NullableLocksAtMost` for locks 10-15.
 
+## HasLockXContext Types: Ensuring Specific Locks
+
+### Overview
+
+`HasLockXContext` types provide a simple pattern for functions that require a specific lock to be already held by the caller, without acquiring new locks themselves.
+
+**Use cases**:
+- Functions that must only run when a specific lock is already acquired
+- Compile-time enforcement of lock prerequisites
+- Documentation of lock dependencies in function signatures
+- Operations that read/use resources protected by a specific lock
+
+### Available Types
+
+Pre-defined types for all 15 lock levels:
+
+```typescript
+import type {
+  HasLock1Context,
+  HasLock2Context,
+  HasLock3Context,
+  // ... through HasLock15Context
+} from '@markdrei/ironguard-typescript-locks';
+```
+
+### Basic Usage
+
+```typescript
+import { 
+  createLockContext,
+  LOCK_3,
+  LOCK_5,
+  type LockContext
+} from '@markdrei/ironguard-typescript-locks';
+import type { HasLock3Context, IronLocks } from '@markdrei/ironguard-typescript-locks';
+
+// Function requires LOCK_3 to be held
+function processData<THeld extends IronLocks>(
+  ctx: HasLock3Context<THeld>
+): void {
+  // TypeScript guarantees LOCK_3 is present
+  ctx.useLock(LOCK_3, () => {
+    console.log('Processing with LOCK_3');
+    // Can safely access resources protected by LOCK_3
+  });
+}
+
+// Usage examples
+const ctx3 = await createLockContext().acquireWrite(LOCK_3);
+processData(ctx3); // ✅ Compiles - LOCK_3 is held
+
+const ctx1 = await createLockContext().acquireWrite(LOCK_1);
+// processData(ctx1); // ❌ Compile error - LOCK_3 not held
+
+const ctx35 = await ctx3.acquireWrite(LOCK_5);
+processData(ctx35); // ✅ Also works - LOCK_3 is held (along with LOCK_5)
+```
+
+### Key Characteristics
+
+1. **Presence Check Only**: `HasLockXContext` only validates that a specific lock is present - it doesn't care about:
+   - What other locks are held
+   - The order locks were acquired
+   - Whether the context can acquire more locks
+
+2. **No Lock Acquisition**: Functions using `HasLockXContext` typically don't acquire new locks themselves - they use locks already held:
+   ```typescript
+   function useExistingLock<THeld extends IronLocks>(
+     ctx: HasLock5Context<THeld>
+   ): void {
+     // ✅ Use the lock that's already held
+     ctx.useLock(LOCK_5, () => {
+       console.log('Using LOCK_5');
+     });
+     
+     // ❌ Cannot acquire LOCK_5 - it's already held
+     // await ctx.acquireWrite(LOCK_5); // Compile error
+   }
+   ```
+
+### Complete Example
+
+See MarksExample.ts
+
+### Comparison with LocksAtMost
+
+| Pattern | Purpose | Lock Presence | Lock Acquisition | Use Case |
+|---------|---------|---------------|------------------|----------|
+| `HasLockXContext` | Require specific lock | Must hold X | None (use existing) | "You must have LOCK_X" |
+| `LocksAtMost` | Accept flexible states | Any combination ≤ N | Can acquire > N | "I accept various lock states" |
+| Both | Constrain inputs | Must hold X, max ≤ N | Can acquire > N | "You must have X, and max ≤ N" |
+
+### Best Practices
+
+1. **Use for Read-Only Operations**: `HasLockXContext` is ideal for functions that only read/use locks:
+   ```typescript
+   function auditLocks<THeld extends IronLocks>(
+     ctx: HasLock5Context<THeld>
+   ): void {
+     console.log(`Audit: LOCK_5 is held among [${ctx.getHeldLocks()}]`);
+   }
+   ```
+
+2. **Document Lock Dependencies**: Makes lock requirements explicit in the type signature
+3. **Combine with useLock()**: Use `useLock()` to work with the guaranteed lock
+4. **Don't Acquire the Same Lock**: The lock is already held, so can't be re-acquired
+5. **Consider hasLock() for Paranoia**: Though TypeScript guarantees it, runtime checks can add safety
+
 ## Best Practices for Context Transfer
 
 1. **Use LocksAtMost for low/mid-level locks**: Better for locks 1-9 where you need flexible acceptance
 2. **Use NullableLocksAtMost for high-level locks**: Better for locks 10-15 to avoid type explosion
-3. **Add null checks**: Always check `if (ctx !== null)` when using nullable types
-4. **Cast when acquiring new locks**: Use `as unknown as LockContext<readonly [N]>` pattern
-5. **Document assumptions**: Add comments explaining why casts are safe
-6. **Chain functions**: Pass contexts through multiple processing stages
+3. **Use HasLockXContext for lock prerequisites**: When functions require specific locks without acquiring them
+4. **Add null checks**: Always check `if (ctx !== null)` when using nullable types
+5. **Cast when acquiring new locks**: Use `as unknown as LockContext<readonly [N]>` pattern
+6. **Document assumptions**: Add comments explaining why casts are safe
+7. **Chain functions**: Pass contexts through multiple processing stages
+8. **Make lock requirements explicit**: Use type constraints to document dependencies
 
 ## Advanced Pattern: Mixed Approach
 
@@ -372,11 +483,19 @@ async function pipeline<THeld extends IronLocks>(
 - **LocksAtMost Types**: Accept any ordered combination of locks 1-N (N ≤ 9)
   - Pre-defined: `LocksAtMost1` through `LocksAtMost9`
   - Can create custom types for higher levels
+  - Use when: Functions need to accept various lock combinations
   
 - **NullableLocksAtMost Types**: Validate maximum lock ≤ N (10 ≤ N ≤ 15)
   - Pre-defined: `NullableLocksAtMost10` through `NullableLocksAtMost15`
   - Require null checks and type casting for lock acquisition
   - More efficient for high lock levels (avoids type explosion)
+  - Use when: Functions need to validate max lock level
 
-Both patterns enable modular, type-safe code that passes lock contexts between functions while maintaining compile-time deadlock prevention.
+- **HasLockXContext Types**: Ensure specific lock X is held
+  - Pre-defined: `HasLock1Context` through `HasLock15Context`
+  - Compile-time guarantee that a specific lock is present
+  - Functions typically use existing locks, don't acquire new ones
+  - Use when: Functions require specific locks as prerequisites
+
+All patterns enable modular, type-safe code that passes lock contexts between functions while maintaining compile-time deadlock prevention.
 
