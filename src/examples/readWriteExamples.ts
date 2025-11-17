@@ -87,12 +87,12 @@ async function hierarchicalMixedDemo(): Promise<void> {
   const ctx3 = await ctx2.acquireRead(LOCK_5);
   console.log(`Step 3 - Read lock added: ${ctx3.toString()}`);
   
-  // Demonstrate rollback preserving modes
-  const rolledBack = ctx3.rollbackTo(LOCK_3);
-  console.log(`Step 4 - Rolled back to LOCK_3: ${rolledBack.toString()}`);
-  console.log(`  Lock modes: LOCK_1=${rolledBack.getLockMode(LOCK_1)}, LOCK_3=${rolledBack.getLockMode(LOCK_3)}`);
+  // Demonstrate releasing individual lock while preserving modes
+  const without5 = ctx3.releaseLock(LOCK_5);
+  console.log(`Step 4 - Released LOCK_5: ${without5.toString()}`);
+  console.log(`  Lock modes: LOCK_1=${without5.getLockMode(LOCK_1)}, LOCK_3=${without5.getLockMode(LOCK_3)}`);
   
-  rolledBack.dispose();
+  without5.dispose();
 }
 
 // Example 3: Writer preference demonstration

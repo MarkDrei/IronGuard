@@ -11,7 +11,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
 import { createLockContext, LOCK_1, LOCK_2, LOCK_3, LOCK_4, LOCK_5 } from '../src/core';
-import type { ValidLock3Context, Contains, LockContext, LockLevel } from '../src/core';
+import type { Contains, LockContext, LockLevel } from '../src/core';
 
 describe('Compile-time Function Parameter Validation', () => {
   describe('Specific Lock Requirements', () => {
@@ -114,48 +114,24 @@ describe('Compile-time Function Parameter Validation', () => {
   });
 
   describe('Flexible Lock Context Validation', () => {
-    test('should work with ValidLock3Context', async () => {
-      // Function that accepts contexts that can acquire LOCK_3
-      async function flexibleLock3Function<THeld extends readonly LockLevel[]>(
-        context: ValidLock3Context<THeld>
+    test('should work with Contains constraints for lock validation', async () => {
+      // Function that accepts contexts that contain LOCK_3
+      async function requiresLock3<THeld extends readonly LockLevel[]>(
+        context: Contains<THeld, 3> extends true ? LockContext<THeld> : never
       ): Promise<boolean> {
-        // This function can work with any context that either:
-        // 1. Can acquire LOCK_3 (empty, has 1, has 2, has 1&2)
-        // 2. Already has LOCK_3
+        // This function can only work with contexts that have LOCK_3
         return Promise.resolve(true);
       }
 
-      // ✅ Valid: Empty context can acquire LOCK_3
-      const emptyResult = await flexibleLock3Function(createLockContext());
-      assert.strictEqual(emptyResult, true);
-
-      // ✅ Valid: LOCK_1 context can acquire LOCK_3
-      const ctx1 = await createLockContext().acquireWrite(LOCK_1);
-      const ctx1Result = await flexibleLock3Function(ctx1);
-      assert.strictEqual(ctx1Result, true);
-      ctx1.dispose();
-
-      // ✅ Valid: LOCK_2 context can acquire LOCK_3
-      const ctx2 = await createLockContext().acquireWrite(LOCK_2);
-      const ctx2Result = await flexibleLock3Function(ctx2);
-      assert.strictEqual(ctx2Result, true);
-      ctx2.dispose();
-
-      // ✅ Valid: LOCK_1,LOCK_2 context can acquire LOCK_3
-      const ctx12 = await createLockContext().acquireWrite(LOCK_1).then(c => c.acquireWrite(LOCK_2));
-      const ctx12Result = await flexibleLock3Function(ctx12);
-      assert.strictEqual(ctx12Result, true);
-      ctx12.dispose();
-
       // ✅ Valid: Already has LOCK_3
       const ctx3 = await createLockContext().acquireWrite(LOCK_3);
-      const ctx3Result = await flexibleLock3Function(ctx3);
+      const ctx3Result = await requiresLock3(ctx3);
       assert.strictEqual(ctx3Result, true);
       ctx3.dispose();
 
-      // ✅ Valid: Already has LOCK_3 with higher locks (uses existing LOCK_3)
+      // ✅ Valid: Already has LOCK_3 with higher locks
       const ctx34 = await createLockContext().acquireWrite(LOCK_3).then(c => c.acquireWrite(LOCK_4));
-      const ctx34Result = await flexibleLock3Function(ctx34);
+      const ctx34Result = await requiresLock3(ctx34);
       assert.strictEqual(ctx34Result, true);
       ctx34.dispose();
 
@@ -163,11 +139,11 @@ describe('Compile-time Function Parameter Validation', () => {
         .acquireWrite(LOCK_3)
         .then(c => c.acquireWrite(LOCK_4))
         .then(c => c.acquireWrite(LOCK_5));
-      const ctx345Result = await flexibleLock3Function(ctx345);
+      const ctx345Result = await requiresLock3(ctx345);
       assert.strictEqual(ctx345Result, true);
       ctx345.dispose();
 
-      // ❌ Compile-time errors: Cannot acquire LOCK_3
+      // ❌ Compile-time errors: Does not have LOCK_3
       // const ctx4 = await createLockContext().acquireWrite(LOCK_4);
       // flexibleLock3Function(ctx4); // LOCK_4 cannot acquire LOCK_3 (ordering violation)
       // const ctx5 = await createLockContext().acquireWrite(LOCK_5);
@@ -180,7 +156,7 @@ describe('Compile-time Function Parameter Validation', () => {
       // flexibleLock3Function(ctx35); // Already has LOCK_3, cannot acquire again
     });
 
-    test('should work with different ValidLockXContext patterns', async () => {
+    test('should work with different lock context patterns', async () => {
       // Function accepting contexts that can acquire LOCK_1 (any context)
       function flexibleLock1Function<THeld extends readonly LockLevel[]>(
         context: LockContext<THeld> // Any context can acquire LOCK_1
@@ -244,7 +220,7 @@ describe('Compile-time Function Parameter Validation', () => {
     test('should support function composition with lock requirements', async () => {
       // Chain of functions with different lock requirements
       function stepOne<THeld extends readonly LockLevel[]>(
-        context: ValidLock3Context<THeld> extends LockContext<THeld> ? LockContext<THeld> : never
+        context: Contains<THeld, 3> extends true ? LockContext<THeld> : never
       ): string {
         return `Step 1 with: ${context.getHeldLocks().join(',')}`;
       }
@@ -262,7 +238,7 @@ describe('Compile-time Function Parameter Validation', () => {
         .then(c => c.acquireWrite(LOCK_2))
         .then(c => c.acquireWrite(LOCK_3));
 
-      const step1Result = stepOne(ctx123); // Needs ValidLock3Context
+      const step1Result = stepOne(ctx123); // Needs LOCK_3
       const step2Result = stepTwo(ctx123, step1Result); // Needs LOCK_2
 
       assert.ok(step1Result.includes('1,2,3'), 'Step 1 should work');
@@ -271,7 +247,7 @@ describe('Compile-time Function Parameter Validation', () => {
 
       // ❌ Compile-time errors: Context doesn't satisfy both
       // const ctx1 = await createLockContext().acquireWrite(LOCK_1);
-      // const step1Only = stepOne(ctx1); // Works - can acquire LOCK_3
+      // const step1Only = stepOne(ctx1); // Fails - missing LOCK_3
       // stepTwo(ctx1, step1Only); // Fails - missing LOCK_2
       
       // const ctx4 = await createLockContext().acquireWrite(LOCK_4);

@@ -10,7 +10,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
 import { createLockContext, LOCK_1, LOCK_2, LOCK_3, LOCK_4, LOCK_5 } from '../src/core';
-import type { ValidLock3Context, Contains, LockContext, LockLevel } from '../src/core';
+import type { Contains, LockContext, LockLevel } from '../src/core';
 
 describe('IronGuard Advanced Features', () => {
   describe('Type System Validation', () => {
@@ -18,52 +18,7 @@ describe('IronGuard Advanced Features', () => {
       // This test demonstrates that the type system works correctly
       // The actual validation happens at compile-time, not runtime
       
-      // ✅ These would compile successfully:
-      // function needsLock3<T>(ctx: ValidLock3Context<T>) { return ctx; }
-      // needsLock3(createLockContext());
-      // const ctx1 = await createLockContext().acquireWrite(LOCK_1);
-      // needsLock3(ctx1);
-      // const ctx3 = await createLockContext().acquireWrite(LOCK_3);
-      // needsLock3(ctx3);
-      
-      // ❌ These would cause compile errors:
-    //   const ctx4 = await createLockContext().acquireWrite(LOCK_4);
-    //   needsLock3(ctx4);
-    //   const ctx5 = await createLockContext().acquireWrite(LOCK_5);
-    //   needsLock3(ctx5);
-      
       assert.ok(true, 'Type system validation happens at compile-time');
-    });
-
-    test('should work with flexible lock functions', async () => {
-      // Test function that demonstrates flexible lock usage
-      async function testFlexibleFunction<THeld extends readonly LockLevel[]>(
-        context: ValidLock3Context<THeld>
-      ): Promise<boolean> {
-        // This function can only be called with contexts that either:
-        // 1. Can acquire lock 3 (empty, has 1, has 2, has 1&2)
-        // 2. Already have lock 3
-        return Promise.resolve(true);
-      }
-
-      // These calls demonstrate the flexible nature of the type system
-      const emptyCtx = createLockContext();
-      const result1 = await testFlexibleFunction(emptyCtx);
-      assert.strictEqual(result1, true);
-
-      const ctx1 = await createLockContext().acquireWrite(LOCK_1);
-      const result2 = await testFlexibleFunction(ctx1);
-      assert.strictEqual(result2, true);
-      ctx1.dispose();
-
-      const ctx3 = await createLockContext().acquireWrite(LOCK_3);
-      const result3 = await testFlexibleFunction(ctx3);
-      assert.strictEqual(result3, true);
-      ctx3.dispose();
-
-      // ❌ This would cause a compile error:
-    //   const ctx4 = await createLockContext().acquireWrite(LOCK_4);
-    //   testFlexibleFunction(ctx4); // Cannot work with only lock 4
     });
 
     test('should demonstrate function parameter constraints', async () => {

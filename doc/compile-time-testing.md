@@ -1,26 +1,6 @@
-# Compile-time Testi### Test Coverage
+# Compile-time Testing
 
-### Lock Violations Detected
-- **Ordering**: LOCK_3 → LOCK_1, LOCK_4 → LOCK_2, complex sequences, high locks
-- **Duplicates**: LOCK_1 twice, LOCK_3 twice, high lock duplicates  
-- **Usage**: Using non-held locks, empty context violations
-- **Parameters**: Invalid `ValidLock3Context` usage with composable types
-- **Rollback**: Rollback to non-held locks, invalid rollback operations
-- **High Locks**: LOCK_6 through LOCK_15 ordering and duplication violations
-- **Context Transfer**: Invalid context passing to functions with lock requirements
-- **Composable Types**: All 15 ValidLockXContext types with descriptive errors
-
-### Composable Types Validation
-The new composable ValidLockContext system is fully tested:
-- **Building blocks**: `HasLock`, `CanAcquireLockX`, `MaxHeldLock` validation
-- **All 15 levels**: `ValidLock1Context` through `ValidLock15Context`
-- **Error messages**: "Cannot acquire lock 3 when holding lock 8. Locks must be acquired in order."
-- **Hierarchical composition**: `CanAcquireLock5` builds on `CanAcquireLock4`, etc.
-
-### Current Status
-- **21 negative tests**: Invalid patterns that should fail compilation
-- **10 positive tests**: Valid code patterns to verify testing infrastructure  
-- **Total**: 31/31 tests passing ✅rovides automated testing to verify TypeScript correctly prevents invalid lock operations at compile-time.
+IronGuard provides automated testing to verify TypeScript correctly prevents invalid lock operations at compile-time.
 
 ## Quick Start
 
@@ -42,17 +22,16 @@ The automated script (`scripts/test-compile-time.js`) creates temporary TypeScri
 
 ### Lock Violations Detected
 - **Ordering**: LOCK_3 → LOCK_1, LOCK_4 → LOCK_2, complex sequences, high locks
-- **Duplicates**: LOCK_1 twice, LOCK_3 twice, high lock duplicates
+- **Duplicates**: LOCK_1 twice, LOCK_3 twice, high lock duplicates  
 - **Usage**: Using non-held locks, empty context violations
-- **Parameters**: Invalid `ValidLock3Context` usage, missing required locks
-- **Rollback**: Rollback to non-held locks, invalid rollback operations
+- **Parameters**: Invalid function parameter constraints, missing required locks
 - **High Locks**: LOCK_6 through LOCK_15 ordering and duplication violations
 - **Context Transfer**: Invalid context passing to functions with lock requirements
 
 ### Current Status
-- **21 negative tests**: Invalid patterns that should fail compilation
-- **10 positive tests**: Valid code patterns to verify testing infrastructure
-- **Total**: 31/31 tests passing
+- **17 negative tests**: Invalid patterns that should fail compilation
+- **10 positive tests**: Valid code patterns to verify testing infrastructure  
+- **Total**: 27/27 tests passing ✅
 
 ## Adding New Tests
 

@@ -321,4 +321,135 @@ describe('Compile-time Lock Usage Checks', () => {
       assert.ok(true, 'Type system has well-defined boundaries');
     });
   });
+
+  describe('Temporary Lock Acquisition (useLockWithAcquire)', () => {
+    test('should acquire lock, execute operation, and release automatically', async () => {
+      const base = await createLockContext().acquireWrite(LOCK_1);
+      
+      let executedInsideCallback = false;
+      await base.useLockWithAcquire(LOCK_3, (ctx) => {
+        // Inside callback, should hold both locks
+        assert.deepStrictEqual(ctx.getHeldLocks(), [1, 3]);
+        executedInsideCallback = true;
+      });
+      
+      assert.strictEqual(executedInsideCallback, true);
+      // After callback, base still holds LOCK_1 but LOCK_3 is released
+      assert.deepStrictEqual(base.getHeldLocks(), [1]);
+      base.dispose();
+    });
+
+    test('should support async operations', async () => {
+      const base = await createLockContext().acquireWrite(LOCK_2);
+      
+      const result = await base.useLockWithAcquire(LOCK_4, async (ctx) => {
+        await new Promise(resolve => setTimeout(resolve, 10));
+        return ctx.getHeldLocks().join(',');
+      });
+      
+      assert.strictEqual(result, '2,4');
+      assert.deepStrictEqual(base.getHeldLocks(), [2]);
+      base.dispose();
+    });
+
+    test('should propagate return values', async () => {
+      const base = await createLockContext().acquireWrite(LOCK_1);
+      
+      const numericResult = await base.useLockWithAcquire(LOCK_2, () => 42);
+      assert.strictEqual(numericResult, 42);
+      
+      const stringResult = await base.useLockWithAcquire(LOCK_3, () => 'test-value');
+      assert.strictEqual(stringResult, 'test-value');
+      
+      const objectResult = await base.useLockWithAcquire(LOCK_4, () => ({ key: 'value' }));
+      assert.deepStrictEqual(objectResult, { key: 'value' });
+      
+      base.dispose();
+    });
+
+    test('should release lock even if operation throws', async () => {
+      const base = await createLockContext().acquireWrite(LOCK_1);
+      
+      try {
+        await base.useLockWithAcquire(LOCK_3, () => {
+          throw new Error('Intentional error');
+        });
+        assert.fail('Should have thrown');
+      } catch (error) {
+        assert.strictEqual((error as Error).message, 'Intentional error');
+      }
+      
+      // LOCK_3 should be released despite error
+      assert.deepStrictEqual(base.getHeldLocks(), [1]);
+      base.dispose();
+    });
+
+    test('should support read mode acquisition', async () => {
+      const base = await createLockContext().acquireWrite(LOCK_1);
+      
+      await base.useLockWithAcquire(LOCK_3, (ctx) => {
+        assert.strictEqual(ctx.getLockMode(LOCK_3), 'read');
+      }, 'read');
+      
+      base.dispose();
+    });
+
+    test('should support write mode acquisition (default)', async () => {
+      const base = await createLockContext().acquireWrite(LOCK_2);
+      
+      await base.useLockWithAcquire(LOCK_4, (ctx) => {
+        assert.strictEqual(ctx.getLockMode(LOCK_4), 'write');
+      });
+      
+      base.dispose();
+    });
+
+    test('should allow nested temporary acquisitions', async () => {
+      const base = await createLockContext().acquireWrite(LOCK_1);
+      
+      await base.useLockWithAcquire(LOCK_2, async (ctx2) => {
+        assert.deepStrictEqual(ctx2.getHeldLocks(), [1, 2]);
+        
+        await ctx2.useLockWithAcquire(LOCK_4, (ctx4) => {
+          assert.deepStrictEqual(ctx4.getHeldLocks(), [1, 2, 4]);
+        });
+        
+        // After inner release, should still hold [1, 2]
+        assert.deepStrictEqual(ctx2.getHeldLocks(), [1, 2]);
+      });
+      
+      // After outer release, should only hold [1]
+      assert.deepStrictEqual(base.getHeldLocks(), [1]);
+      base.dispose();
+    });
+
+    test('should enforce compile-time lock ordering', async () => {
+      const ctx3 = await createLockContext().acquireWrite(LOCK_3);
+      
+      // ✅ Valid: Can acquire higher locks
+      await ctx3.useLockWithAcquire(LOCK_5, (ctx) => {
+        assert.deepStrictEqual(ctx.getHeldLocks(), [3, 5]);
+      });
+      
+      // ❌ Compile-time error: Cannot acquire lower locks
+      // await ctx3.useLockWithAcquire(LOCK_1, () => {});
+      // await ctx3.useLockWithAcquire(LOCK_2, () => {});
+      
+      ctx3.dispose();
+    });
+
+    test('should allow using acquired lock within callback', async () => {
+      const base = await createLockContext().acquireWrite(LOCK_1);
+      
+      await base.useLockWithAcquire(LOCK_3, (ctx) => {
+        let lock3Used = false;
+        ctx.useLock(LOCK_3, () => {
+          lock3Used = true;
+        });
+        assert.strictEqual(lock3Used, true);
+      });
+      
+      base.dispose();
+    });
+  });
 });

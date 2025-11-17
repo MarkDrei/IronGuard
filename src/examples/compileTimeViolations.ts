@@ -92,35 +92,6 @@ async function demonstrateCompileTimeViolations(): Promise<void> {
   useCtx1.dispose();
 
   // =============================================================================
-  // INVALID FUNCTION PARAMETER CONTEXTS
-  // =============================================================================
-  
-  console.log('🎯 Invalid Function Parameter Contexts:');
-  console.log('----------------------------------------');
-  
-  // Example function that requires lock 3 (using the ValidLock3Context type)
-  async function requiresLock3Function<THeld extends readonly any[]>(
-    context: import('../core/ironGuardTypes').ValidLock3Context<THeld>
-  ): Promise<void> {
-    console.log(`Function with lock 3 requirement: ${(context as any).toString()}`);
-  }
-  
-  const paramCtx4 = await createLockContext().acquireWrite(LOCK_4);
-  const paramCtx5 = await createLockContext().acquireWrite(LOCK_5);
-  
-  console.log('// ❌ Passing contexts that cannot satisfy lock 3 requirement:');
-  console.log('// await requiresLock3Function(paramCtx4);  // Has 4 but not 3');
-  console.log('// await requiresLock3Function(paramCtx5);  // Has 5 but not 3');
-  
-  // Uncomment to see compile errors:
-//   await requiresLock3Function(paramCtx4);  // ❌ Compile error!
-//   await requiresLock3Function(paramCtx5);  // ❌ Compile error!
-  
-  console.log('');
-  paramCtx4.dispose();
-  paramCtx5.dispose();
-
-  // =============================================================================
   // COMPLEX ORDERING VIOLATIONS
   // =============================================================================
   

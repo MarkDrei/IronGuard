@@ -30,43 +30,46 @@ export {
   LOCK_15
 } from './core/ironGuardSystem';
 
-// All ValidLockContext types for function constraints
+// Flexible lock context types for function signatures
 export type {
-  ValidLock1Context,
-  ValidLock2Context,
-  ValidLock3Context,
-  ValidLock4Context,
-  ValidLock5Context,
-  ValidLock6Context,
-  ValidLock7Context,
-  ValidLock8Context,
-  ValidLock9Context,
-  ValidLock10Context,
-  ValidLock11Context,
-  ValidLock12Context,
-  ValidLock13Context,
-  ValidLock14Context,
-  ValidLock15Context
-} from './core/ironGuardTypes';
+
+} from './core/ironGuardSystem';
 
 // Utility building blocks for advanced usage
 export type {
   HasLock,
   IsEmpty,
   MaxHeldLock,
-  CanAcquireLock1,
-  CanAcquireLock2,
-  CanAcquireLock3,
-  CanAcquireLock4,
-  CanAcquireLock5,
-  CanAcquireLock6,
-  CanAcquireLock7,
-  CanAcquireLock8,
-  CanAcquireLock9,
-  CanAcquireLock10,
-  CanAcquireLock11,
-  CanAcquireLock12,
-  CanAcquireLock13,
-  CanAcquireLock14,
-  CanAcquireLock15
+  
+  LocksAtMost1,
+  LocksAtMost2,
+  LocksAtMost3,
+  LocksAtMost4,
+  LocksAtMost5,
+  LocksAtMost6,
+  LocksAtMost7,
+  LocksAtMost8,
+  LocksAtMost9,
+  NullableLocksAtMost10,
+  NullableLocksAtMost11,
+  NullableLocksAtMost12,
+  NullableLocksAtMost13,
+  NullableLocksAtMost14,
+  NullableLocksAtMost15,
+
+  HasLock1Context,
+  HasLock2Context,
+  HasLock3Context,
+  HasLock4Context,
+  HasLock5Context,
+  HasLock6Context,
+  HasLock7Context,
+  HasLock8Context,
+  HasLock9Context,
+  HasLock10Context,
+  HasLock11Context,
+  HasLock12Context,
+  HasLock13Context,
+  HasLock14Context,
+  HasLock15Context
 } from './core/ironGuardTypes';
