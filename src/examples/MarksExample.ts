@@ -38,7 +38,7 @@ export async function runMarksExample(): Promise<void> {
     console.log('║   IronGuard Feature Overview Demo   ║');
     console.log('╚══════════════════════════════════════╝');
     
-    await validPath();  
+    await validPath();
 }
 
 async function validPath(): Promise<void> {

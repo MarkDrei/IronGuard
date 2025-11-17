@@ -127,6 +127,14 @@ class IronGuardManager {
     }
   }
 
+  // Check if a specific lock is currently held at runtime
+  isLockHeld(lock: LockLevel, mode: LockMode): boolean {
+    if (mode === 'read') {
+      return (this.readerCounts.get(lock) || 0) > 0;
+    }
+    return this.activeWriters.has(lock);
+  }
+
   // Helper methods
   private hasActiveReaders(lock: LockLevel): boolean {
     return (this.readerCounts.get(lock) || 0) > 0;
@@ -333,12 +341,87 @@ class LockContext<THeldLocks extends readonly LockLevel[] = readonly []> {
     return new LockContext([...this.heldLocks, lock] as const, newLockModes);
   }
 
-  // Use a lock - COMPILE-TIME ONLY enforcement
+  /**
+   * Execute an operation while holding a specific lock.
+   * 
+   * Validates at compile-time that the lock is held by this context, and at runtime
+   * that the lock hasn't been released. Useful for ensuring critical sections execute
+   * with the correct lock protection.
+   * 
+   * @param lock - Lock level that must be held by this context (compile-time validated)
+   * @param operation - Synchronous callback to execute under lock protection
+   * @throws {Error} If lock is not held at runtime (e.g., after disposal)
+   * 
+   * @example
+   * ```ts
+   * const ctx = await createLockContext().acquireWrite(LOCK_1);
+   * ctx.useLock(LOCK_1, () => {
+   *   // Safe: guaranteed to hold LOCK_1
+   *   console.log('Critical section');
+   * });
+   * ctx.dispose();
+   * ```
+   */
   useLock<TLock extends LockLevel>(
     lock: Contains<THeldLocks, TLock> extends true ? TLock : never,
     operation: () => void
   ): void {
+    const mode = this.lockModes.get(lock);
+    if (!mode) {
+      throw new Error(`Cannot use lock ${lock}: not tracked by this context`);
+    }
+
+    if (!this.manager.isLockHeld(lock, mode)) {
+      throw new Error(`Cannot use lock ${lock}: lock is not held at runtime`);
+    }
+
     operation();
+  }
+
+  /**
+   * Temporarily acquire a lock, execute an operation, then automatically release it.
+   * 
+   * Provides scoped lock acquisition with guaranteed cleanup via finally block. The lock
+   * is validated at compile-time for correct ordering and automatically released after
+   * operation completes (or throws). Useful for temporary lock elevation patterns.
+   * 
+   * @param lock - Lock level to acquire (must be valid per ordering rules)
+   * @param operation - Async or sync callback receiving elevated context; return value is propagated
+   * @param mode - Acquire as 'read' or 'write' (default: 'write')
+   * @returns Promise resolving to operation's return value
+   * 
+   * @example
+   * ```ts
+   * const base = await createLockContext().acquireWrite(LOCK_1);
+   * 
+   * const result = await base.useLockWithAcquire(LOCK_3, async (ctx) => {
+   *   // ctx holds [LOCK_1, LOCK_3]
+   *   ctx.useLock(LOCK_3, () => console.log('Using LOCK_3'));
+   *   return 42;
+   * });
+   * // LOCK_3 auto-released here, base still holds LOCK_1
+   * console.log(result); // 42
+   * ```
+   */
+  async useLockWithAcquire<
+    TLock extends LockLevel,
+    TResult = void
+  >(
+    lock: CanAcquireInternal<THeldLocks, TLock> extends true ? TLock : never,
+    operation: (ctx: LockContext<readonly [...THeldLocks, TLock]>) => Promise<TResult> | TResult,
+    mode: LockMode = 'write'
+  ): Promise<TResult> {
+    const ctxWithLock = mode === 'read'
+      ? await this.acquireRead(lock)
+      : await this.acquireWrite(lock);
+
+    try {
+      return await operation(ctxWithLock);
+    } finally {
+      ctxWithLock.releaseLock(
+        lock as unknown as Contains<readonly [...THeldLocks, TLock], TLock> extends true ? TLock : never
+      );
+    }
   }
 
   // Rollback to a previous lock level - COMPILE-TIME ONLY enforcement

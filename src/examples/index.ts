@@ -32,43 +32,15 @@ import { runContextTransferDemo } from './contextTransferDemo';
 import { runFlexibleLockTypesDemo } from './flexibleLockTypesDemo';
 import { runHasLockContextDemo } from './hasLockContextDemo';
 import { runMarksExample } from './MarksExample';
+import { runUseLockRuntimeDemo } from './useLockRuntimeDemo';
 
 async function main(): Promise<void> {
-  console.log('�️ IronGuard System\n');
+
+  console.log('=== IronGuard System Examples ===');
   console.log('This system demonstrates compile-time lock ordering validation');
   console.log('with unbreakable protection and flexible acquisition patterns.\n');
   
-  // Basic lock operations - demonstrating sequential usage
-  console.log('=== Basic Lock Operations (Sequential) ===');
-  
-  // Show valid acquisitions - use and release locks sequentially
-  const ctx1 = createLockContext();
-  const withLock1 = await ctx1.acquireWrite(LOCK_1);
-  console.log(`✅ Empty → Lock 1: ${withLock1.toString()}`);
-  
-  const withLock1And4 = await withLock1.acquireWrite(LOCK_4);
-  console.log(`✅ Lock 1 → Lock 4: ${withLock1And4.toString()}`);
-  
-  // Release locks before acquiring different ones
-  withLock1And4.dispose();
-  
-  const directLock3 = await createLockContext().acquireWrite(LOCK_3);
-  console.log(`✅ Direct Lock 3: ${directLock3.toString()}`);
-  
-  // Function parameter validation
-  console.log('\n=== Function Parameter Validation ===');
-  
-  // Release lock 3 first
-  directLock3.dispose();
-  
-  const ctxWithLock2 = await createLockContext().acquireWrite(LOCK_2);
-  console.log('Calling function that requires lock 2:');
-  functionRequiringLock2(ctxWithLock2);
-  
-  // Release lock 2
-  ctxWithLock2.dispose();
-  
-  // More examples
+  // Lock skipping demo
   await demonstrateLockSkipping();
   
   // Compile-time violations demo
@@ -97,6 +69,9 @@ async function main(): Promise<void> {
   
   // Mark's compact feature overview
   await runMarksExample();
+
+  // useLock() runtime safety demo
+  await runUseLockRuntimeDemo();
   
   console.log('\n=== Key Benefits ===');
   console.log('✓ Runtime mutual exclusion (real thread safety)');
