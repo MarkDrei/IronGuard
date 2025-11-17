@@ -1,6 +1,6 @@
 # IronGuard Quick Start Guide
 
-This guide covers the essential features of the IronGuard lock ordering system, from basic usage to advanced patterns.
+This guide covers the essential patterns for using IronGuard's lock ordering system safely and effectively.
 
 ## Installation & Setup
 
@@ -13,189 +13,265 @@ npm run examples  # See all features in action
 ## Core Concepts
 
 - **Lock Levels**: 15 levels (LOCK_1 through LOCK_15) representing increasing privilege
+- **Compile Time Deadlock Prevention**: TypeScript prevents lock ordering violations at compile-time
 - **Lock Ordering**: Must acquire locks in ascending order (can skip levels)
-- **Type Safety**: TypeScript prevents lock ordering violations at compile-time
 - **Runtime Safety**: Async mutual exclusion prevents race conditions
 
-## Basic Usage
+## Key Usage Patterns
 
-### 1. Simple Lock Acquisition
+### 1. Basic Lock Acquisition and Release
+
+The safest pattern uses `useLockWithAcquire()` for automatic cleanup:
 
 ```typescript
-import { createLockContext, LOCK_1, LOCK_3, LOCK_5 } from './src/core';
+import { createLockContext, LOCK_1, LOCK_3 } from './src/core';
 
-// ✅ Valid: ascending order
-const ctx = await createLockContext()
-  .acquireWrite(LOCK_1)
-  .then(c => c.acquireWrite(LOCK_3))
-  .then(c => c.acquireWrite(LOCK_5));
+const ctx0 = createLockContext();
 
-// Always dispose when done
-ctx.dispose();
+await ctx0.useLockWithAcquire(LOCK_1, async (ctx1) => {
+  console.log(`Holding: [${ctx1.getHeldLocks()}]`); // [1]
+  
+  await ctx1.useLockWithAcquire(LOCK_3, async (ctx13) => {
+    console.log(`Holding: [${ctx13.getHeldLocks()}]`); // [1, 3]
+    // Use locks here
+  }); // LOCK_3 auto-released
+  
+  console.log(`Holding: [${ctx1.getHeldLocks()}]`); // [1]
+}); // LOCK_1 auto-released
 ```
 
-### 2. Lock Skipping
+**Why this is best**: Locks are automatically released even if exceptions occur. No risk of forgetting cleanup.
+
+### 2. Manual Lock Management
+
+When you need more control, acquire and release explicitly:
 
 ```typescript
-// ✅ Valid: can skip intermediate locks
 const ctx1 = await createLockContext().acquireWrite(LOCK_1);
-const ctx15 = await ctx1.acquireWrite(LOCK_5);  // Skipped 2, 3, 4
+try {
+  console.log(`Holding: [${ctx1.getHeldLocks()}]`); // [1]
+  
+  const ctx13 = await ctx1.acquireWrite(LOCK_3);
+  try {
+    console.log(`Holding: [${ctx13.getHeldLocks()}]`); // [1, 3]
+    // Use locks here
+  } finally {
+    ctx13.releaseLock(LOCK_3); // Release only LOCK_3
+  }
+  
+  console.log(`Holding: [${ctx1.getHeldLocks()}]`); // [1]
+} finally {
+  ctx1.releaseLock(LOCK_1); // Release only LOCK_1
+}
+```
+
+**Key point**: Use `releaseLock()` to release individual locks while keeping others.
+
+### 3. The Danger of dispose()
+
+⚠️ **WARNING**: `dispose()` releases ALL locks and invalidates the entire context chain:
+
+```typescript
+const ctx1 = await createLockContext().acquireWrite(LOCK_1);
+const ctx13 = await ctx1.acquireWrite(LOCK_3);
+const ctx135 = await ctx13.acquireWrite(LOCK_5);
+
+ctx135.dispose(); // ⚠️ Releases ALL locks: 5, 3, AND 1
+                  // Now ctx135, ctx13, and ctx1 are ALL invalid!
+
+// ❌ RUNTIME ERROR: Resources are no longer locked, can lead to race conditions
+```
+
+**When to use dispose()**:
+- Only when you're done with the ENTIRE lock chain
+- Prefer `releaseLock()` for individual locks
+- Prefer `useLockWithAcquire()` for automatic cleanup
+
+### 4. Passing Locks Between Functions
+
+Functions can accept flexible lock states using `LocksAtMost` types:
+
+```typescript
+import type { LocksAtMost5 } from './src/core';
+
+// Accepts any ordered combination of locks 1-5
+async function middleProcessor(context: LockContext<LocksAtMost5>): Promise<void> {
+  // Can't acquire locks 1-5 (might already be held)
+  // ❌ await context.acquireWrite(LOCK_3); // Compile error
+  
+  // ✅ Can acquire locks above 5
+  const withLock6 = await context.acquireWrite(LOCK_6);
+  try {
+    // Use locks
+  } finally {
+    withLock6.releaseLock(LOCK_6);
+  }
+}
+
+// Usage
+const ctx1 = await createLockContext().acquireWrite(LOCK_1);
+await middleProcessor(ctx1); // ✅ [1] is in LocksAtMost5
+
+const ctx3 = await createLockContext().acquireWrite(LOCK_3);
+await middleProcessor(ctx3); // ✅ [3] is in LocksAtMost5
+
+const ctx135 = await ctx1.acquireWrite(LOCK_3).then(c => c.acquireWrite(LOCK_5));
+await middleProcessor(ctx135); // ✅ [1,3,5] is in LocksAtMost5
+```
+
+### 5. Complete Example Flow
+
+Combining all patterns from MarksExample.ts:
+
+```typescript
+async function validPath(): Promise<void> {
+  const ctx1 = await createLockContext().acquireWrite(LOCK_1);
+  try {
+    console.log(`Step 1: [${ctx1.getHeldLocks()}]`); // [1]
+    await middleProcessor(ctx1);
+    
+    const ctx13 = await ctx1.acquireWrite(LOCK_3);
+    try {
+      console.log(`Step 2: [${ctx13.getHeldLocks()}]`); // [1, 3]
+      await middleProcessor(ctx13);
+    } finally {
+      ctx13.releaseLock(LOCK_3); // Release only LOCK_3
+    }
+  } finally {
+    ctx1.dispose(); // ⚠️ Releases all remaining locks
+  }
+}
+
+async function middleProcessor(context: LockContext<LocksAtMost5>): Promise<void> {
+  const withLock6 = await context.acquireWrite(LOCK_6);
+  try {
+    console.log(`Processing: [${withLock6.getHeldLocks()}]`);
+    await finalProcessor(withLock6);
+  } finally {
+    withLock6.releaseLock(LOCK_6);
+  }
+}
+
+async function finalProcessor<THeld extends IronLocks>(
+  ctx: NullableLocksAtMost10<THeld>
+): Promise<void> {
+  if (ctx !== null) {
+    // Context has locks ≤10, can acquire higher locks
+    console.log(`Final: [${ctx.getHeldLocks()}]`);
+  }
+}
+```
+
+## Lock Skipping
+
+You can skip intermediate locks:
+
+```typescript
+// ✅ Valid: skip locks 2, 3, 4
+const ctx1 = await createLockContext().acquireWrite(LOCK_1);
+const ctx15 = await ctx1.acquireWrite(LOCK_5);
 
 // ✅ Valid: direct acquisition of any lock
 const ctx8 = await createLockContext().acquireWrite(LOCK_8);
 ```
 
-### 3. Using Locks
-
-```typescript
-const ctx = await createLockContext()
-  .acquireWrite(LOCK_1)
-  .then(c => c.acquireWrite(LOCK_3));
-
-// Use the locks for protected operations
-ctx.useLock(LOCK_1, () => {
-  // Critical section protected by LOCK_1
-});
-
-ctx.useLock(LOCK_3, () => {
-  // Critical section protected by LOCK_3
-});
-
-ctx.dispose();
-```
-
 ## Read/Write Lock Semantics
 
-IronGuard supports concurrent readers with writer preference for enhanced performance:
-
-### 1. Concurrent Readers
+### Concurrent Readers
 
 ```typescript
 // Multiple readers can hold the same lock simultaneously
 const reader1 = await createLockContext().acquireRead(LOCK_3);
-const reader2 = await createLockContext().acquireRead(LOCK_3);  // ✅ Granted immediately
-
-// Both readers can work concurrently
-console.log('Both readers active simultaneously');
-
-reader1.dispose();
-reader2.dispose();
+const reader2 = await createLockContext().acquireRead(LOCK_3); // ✅ Granted immediately
 ```
 
-### 2. Writer Preference
+### Writer Preference
 
 ```typescript
 // Writers get priority over new readers
 const reader1 = await createLockContext().acquireRead(LOCK_3);
+const writerPromise = createLockContext().acquireWrite(LOCK_3); // Waits for reader1
+const reader2Promise = createLockContext().acquireRead(LOCK_3); // Waits for writer
 
-// Writer waits for existing readers but blocks new readers
-const writerPromise = createLockContext().acquireWrite(LOCK_3);
-
-// This reader will wait for the writer (writer preference)
-const reader2Promise = createLockContext().acquireRead(LOCK_3);
-
-reader1.dispose(); // Writer can now proceed
-const writer = await writerPromise;
-writer.dispose();   // Reader2 can now proceed
+reader1.dispose(); // Writer proceeds first (writer preference)
 ```
 
-### 3. Mixed Read/Write Patterns
+### Mixed Read/Write
 
 ```typescript
 // Lock ordering applies regardless of read/write mode
-const ctx = await createLockContext().acquireRead(LOCK_1);    // Read at level 1
-const ctx2 = await ctx.acquireWrite(LOCK_3);                  // Write at level 3
-const ctx3 = await ctx2.acquireRead(LOCK_5);                  // Read at level 5
-
-ctx3.dispose();
+const ctx = await createLockContext()
+  .acquireRead(LOCK_1)
+  .then(c => c.acquireWrite(LOCK_3))
+  .then(c => c.acquireRead(LOCK_5));
 ```
 
-## Context Transfer & Type Safety
+## Flexible Lock Types
 
-Pass lock contexts between functions with compile-time validation:
+### LocksAtMost Types (1-9)
 
-### 1. Type-Safe Function Parameters
+Pre-defined types for accepting multiple lock states:
 
 ```typescript
-// Function that only accepts contexts with LOCK_2 using Contains constraint
-async function processUserData<T extends readonly LockLevel[]>(
-  context: Contains<T, 2> extends true ? LockContext<T> : never
-): Promise<LockContext<T>> {
-  // TypeScript guarantees LOCK_2 is present - no runtime checks needed
-  console.log(`Processing with guaranteed LOCK_2: ${context.toString()}`);
-  return context;
+import type { 
+  LocksAtMost1, LocksAtMost2, LocksAtMost3, // ... up to LocksAtMost9
+} from './src/core';
+
+// Accepts: [], [1], [2], [3], [1,2], [1,3], [2,3], [1,2,3]
+function plugin(ctx: LockContext<LocksAtMost3>): void {
+  // Can acquire locks > 3
 }
 ```
 
-### 2. Usage Examples
+**Type Explosion Note**: Due to TypeScript's exponential type expansion (2^N combinations), only `LocksAtMost1` through `LocksAtMost9` are pre-defined. Each level doubles the type combinations:
+- `LocksAtMost9`: 512 combinations (good performance)
+- `LocksAtMost10`: 1,024 combinations (starts to slow down)
+- `LocksAtMost15`: 32,768 combinations (significant overhead)
+
+### NullableLocksAtMost Types (10-15)
+
+For higher lock levels, use nullable types:
 
 ```typescript
-// ✅ Valid: context contains LOCK_2
-const validCtx = await createLockContext().acquireRead(LOCK_2);
-await processUserData(validCtx);  // Compiles successfully
+import type { 
+  NullableLocksAtMost10,
+  NullableLocksAtMost11,
+  NullableLocksAtMost12,
+  // ... up to NullableLocksAtMost15
+} from './src/core';
 
-// ❌ Compile error: context missing LOCK_2
-const invalidCtx = await createLockContext().acquireRead(LOCK_1);
-await processUserData(invalidCtx);  // TypeScript error with descriptive message
+function handler<THeld extends IronLocks>(
+  ctx: NullableLocksAtMost10<THeld>
+): void {
+  if (ctx !== null) {
+    // Max lock ≤ 10, safe to use
+    console.log(ctx.getHeldLocks());
+  }
+  // If max lock > 10, ctx will be null
+}
 ```
 
-### 3. Function Chaining
-
-```typescript
-// Chain multiple functions with different lock requirements
-const ctx = await createLockContext().acquireRead(LOCK_1);
-const ctx2 = await ctx.acquireWrite(LOCK_2);
-const ctx3 = await ctx2.acquireRead(LOCK_3);
-
-// Pass context through functions that validate requirements
-const result1 = await processUserData(ctx3);      // Requires LOCK_2 ✅
-const result2 = await validateAndSave(result1);   // Requires LOCK_1 & LOCK_3 ✅
-const result3 = await performAudit(result2);      // Works with any context ✅
-
-result3.dispose();
-```
-
-## Advanced Features
-
-### 1. Rollback Functionality
-
-Roll back to previously held locks for flexible lock management:
-
-```typescript
-// Build up locks
-const ctx135 = await createLockContext()
-  .acquireWrite(LOCK_1)
-  .then(c => c.acquireWrite(LOCK_3))
-  .then(c => c.acquireWrite(LOCK_5));
-
-// Rollback to LOCK_3 (releases LOCK_5)
-const ctx13 = ctx135.rollbackTo(LOCK_3);
-
-// Now can acquire different locks
-const ctx134 = await ctx13.acquireWrite(LOCK_4);
-const ctx1348 = await ctx134.acquireWrite(LOCK_8);
-
-ctx1348.dispose();
-```
+**Why nullable?**: These types validate the maximum lock level without generating exponential type combinations. They're a fallback solution for performance reasons.
 
 ## Error Prevention
 
-### Compile-Time Violations (Prevented by TypeScript)
+### Compile-Time Violations
+
+TypeScript prevents these at compilation:
 
 ```typescript
 const ctx3 = await createLockContext().acquireWrite(LOCK_3);
 
-// ❌ These would cause TypeScript compilation errors:
-// const invalid1 = await ctx3.acquireWrite(LOCK_1);    // Lower after higher
-// const invalid2 = await ctx3.acquireWrite(LOCK_3);    // Duplicate acquisition
-// const invalid3 = ctx3.rollbackTo(LOCK_1);       // LOCK_1 not held
-// ctx3.useLock(LOCK_5, () => {});                 // LOCK_5 not held
+// ❌ Compile errors:
+// await ctx3.acquireWrite(LOCK_1);  // Lower after higher
+// await ctx3.acquireWrite(LOCK_3);  // Duplicate acquisition
+// ctx3.useLock(LOCK_5, () => {});   // LOCK_5 not held
 ```
 
 ### Runtime Mutual Exclusion
 
 ```typescript
-// Two threads competing for the same lock
+// Two concurrent operations competing for the same lock
 const thread1 = async () => {
   const ctx = await createLockContext().acquireWrite(LOCK_5);
   console.log('Thread 1 got LOCK_5');
@@ -205,137 +281,33 @@ const thread1 = async () => {
 
 const thread2 = async () => {
   const ctx = await createLockContext().acquireWrite(LOCK_5);
-  console.log('Thread 2 got LOCK_5'); // Will wait for thread1
+  console.log('Thread 2 got LOCK_5'); // Waits for thread1
   ctx.dispose();
 };
 
-// Thread 2 will wait for Thread 1 to release LOCK_5
 await Promise.all([thread1(), thread2()]);
 ```
 
-## Best Practices
+## Best Practices Summary
 
-### 1. Always Dispose Contexts
-
-```typescript
-const ctx = await createLockContext().acquireWrite(LOCK_1);
-try {
-  // Your operations
-} finally {
-  ctx.dispose(); // Always release locks
-}
-```
-
-### 2. Use Lock Skipping for Performance
-
-```typescript
-// ✅ Efficient: skip unnecessary intermediate locks
-const ctx = await createLockContext()
-  .acquireWrite(LOCK_1)
-  .then(c => c.acquireWrite(LOCK_8));  // Skip 2-7 if not needed
-```
-
-### 3. Leverage Rollback for Complex Workflows
-
-```typescript
-// Build up locks for one operation
-const ctx = await createLockContext()
-  .acquireWrite(LOCK_1)
-  .then(c => c.acquireWrite(LOCK_5))
-  .then(c => c.acquireWrite(LOCK_10));
-
-// Operation 1
-performOperation1(ctx);
-
-// Rollback and take different path for operation 2
-const rolled = ctx.rollbackTo(LOCK_5);
-const extended = await rolled.acquireWrite(LOCK_8);
-performOperation2(extended);
-
-extended.dispose();
-```
-
-### 4. Use Type Constraints for API Design
-
-```typescript
-// Create functions that enforce specific lock requirements
-function databaseOperation<THeld extends readonly LockLevel[]>(
-  context: Contains<THeld, 2> extends true ? LockContext<THeld> : never
-) {
-  // Only callable with contexts holding LOCK_2 (database lock)
-}
-
-function fileOperation<THeld extends readonly LockLevel[]>(
-  context: Contains<THeld, 5> extends true ? LockContext<THeld> : never
-) {
-  // Only callable with contexts holding LOCK_5 (file lock)
-}
-```
+1. **Prefer `useLockWithAcquire()`** for automatic cleanup
+2. **Use `releaseLock()`** when you need to release individual locks
+3. **Avoid `dispose()`** unless you're done with the entire lock chain
+4. **Use `LocksAtMost` types** (1-9) for flexible function parameters
+5. **Use `NullableLocksAtMost` types** (10-15) as a fallback for higher lock levels
+6. **Always clean up locks** in finally blocks or with automatic patterns
 
 ## Testing Your Code
 
-### Run All Examples
 ```bash
 npm run examples                # All features demo
-npm run examples:rollback       # Rollback functionality
-npm run examples:mutex          # Mutual exclusion
-npm run examples:combinations   # Feature combinations
-```
-
-### Validate Type Safety
-```bash
-npm run test:compile            # 31 compile-time validation tests
-```
-
-### Test Runtime Behavior
-```bash
-npm run test                    # 8 runtime tests
-npm run test:all               # Everything (39 total tests)
-```
-
-## Common Patterns
-
-### Sequential Processing with Rollback
-```typescript
-const ctx = await createLockContext().acquireWrite(LOCK_1);
-
-for (const step of processingSteps) {
-  const stepCtx = await ctx.acquireWrite(step.requiredLock);
-  
-  try {
-    await step.execute(stepCtx);
-  } catch (error) {
-    // Rollback and try alternative
-    const rolled = stepCtx.rollbackTo(LOCK_1);
-    await step.fallback(rolled);
-  }
-}
-```
-
-### Conditional Lock Acquisition
-```typescript
-const baseCtx = await createLockContext().acquireWrite(LOCK_1);
-
-let workingCtx = baseCtx;
-if (needsDatabase) {
-  workingCtx = await workingCtx.acquireWrite(LOCK_3);
-}
-if (needsNetwork) {
-  workingCtx = await workingCtx.acquireWrite(LOCK_7);
-}
-if (needsFileSystem) {
-  workingCtx = await workingCtx.acquireWrite(LOCK_12);
-}
-
-// Use workingCtx for operations
-workingCtx.dispose();
+npm run test                    # Runtime tests (155 tests)
+npm run test:compile            # Compile-time validation (85 tests)
 ```
 
 ## Next Steps
 
-- Explore the complete examples: `npm run examples`
-- Study the [Compile-time Testing Guide](compile-time-testing.md)
-- Run feature combination demos: `npm run examples:combinations`
-- Review the test suite for usage patterns: `tests/` directory
-
-The IronGuard system provides both compile-time safety and runtime protection, making it ideal for complex concurrent applications where deadlock prevention and thread safety are critical.
+- Explore `src/examples/MarksExample.ts` for complete usage patterns
+- See `doc/flexible-lock-types.md` for detailed type system documentation
+- Review `doc/nullable-context-patterns.md` for NullableLocksAtMost details
+- Study `tests/` directory for comprehensive usage examples
