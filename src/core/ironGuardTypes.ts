@@ -161,7 +161,7 @@ type HasLock15Context<THeld extends IronLocks> = HasLock<THeld, 15> extends true
  * ```
  *
  * @template T - The tuple to generate ordered subsequences from (typically SUPPORTED_LOCK_LEVELS)
- * @see {@link doc/flexible-lock-types.md} for detailed usage guide and performance analysis
+ * @see {@link doc/context-transfer-patterns.md} for detailed usage guide and performance analysis
  */
 type OrderedSubsequences<T extends readonly number[]> =
   T extends readonly [infer First, ...infer Rest extends readonly number[]]

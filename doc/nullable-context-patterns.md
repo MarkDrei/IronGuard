@@ -478,7 +478,7 @@ test('NullableLocksAtMost10 accepts valid contexts', async () => {
 ## Next Steps
 
 - Review the [Quick Start Guide](quick-start.md) for basic lock usage
-- Explore [Flexible Lock Types](flexible-lock-types.md) for LocksAtMost patterns
+- Explore [Lock Context Transfer Patterns](context-transfer-patterns.md) for LocksAtMost patterns
 - Study [Compile-time Testing](compile-time-testing.md) for type validation
 - Run examples: `npm run examples`
 

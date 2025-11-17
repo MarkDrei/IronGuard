@@ -240,12 +240,25 @@ import type {
   // ... up to NullableLocksAtMost15
 } from './src/core';
 
-function handler<THeld extends IronLocks>(
+async function handler<THeld extends IronLocks>(
   ctx: NullableLocksAtMost10<THeld>
-): void {
+): Promise<void> {
   if (ctx !== null) {
     // Max lock ≤ 10, safe to use
-    console.log(ctx.getHeldLocks());
+    console.log(`Locks: [${ctx.getHeldLocks()}]`);
+    console.log(`Max: ${ctx.getMaxHeldLock()}`);
+    
+    // To acquire new locks, cast to a concrete type
+    // The type system guarantees max lock ≤ 10
+    if (ctx.getMaxHeldLock() <= 10) {
+      const safeCtx = ctx as unknown as LockContext<readonly [10]>;
+      const withLock11 = await safeCtx.acquireWrite(LOCK_11);
+      try {
+        console.log(`Acquired LOCK_11: [${withLock11.getHeldLocks()}]`);
+      } finally {
+        withLock11.releaseLock(LOCK_11);
+      }
+    }
   }
   // If max lock > 10, ctx will be null
 }
@@ -308,6 +321,6 @@ npm run test:compile            # Compile-time validation (85 tests)
 ## Next Steps
 
 - Explore `src/examples/MarksExample.ts` for complete usage patterns
-- See `doc/flexible-lock-types.md` for detailed type system documentation
+- See `doc/context-transfer-patterns.md` for detailed type system documentation
 - Review `doc/nullable-context-patterns.md` for NullableLocksAtMost details
 - Study `tests/` directory for comprehensive usage examples

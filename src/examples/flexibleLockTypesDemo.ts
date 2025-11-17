@@ -255,7 +255,7 @@ export async function runFlexibleLockTypesDemo(): Promise<void> {
     console.log('\n'.repeat(2));
     console.log('═══════════════════════════════════════════════════════════════');
     console.log('  Demo completed successfully!');
-    console.log('  See doc/flexible-lock-types.md for detailed documentation');
+    console.log('  See doc/context-transfer-patterns.md for detailed documentation');
     console.log('═══════════════════════════════════════════════════════════════\n');
   } catch (error) {
     console.error('\n❌ Demo failed:', error);
