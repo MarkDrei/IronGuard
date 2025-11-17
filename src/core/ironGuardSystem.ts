@@ -313,7 +313,27 @@ class LockContext<THeldLocks extends readonly LockLevel[] = readonly []> {
     }
   }
 
-  // Acquire a read lock - COMPILE-TIME ONLY enforcement with runtime read/write semantics
+  /**
+   * Acquire a read lock on the specified lock level.
+   * 
+   * Read locks allow concurrent access by multiple readers, but block if a writer
+   * is active or pending (writer preference). The lock must satisfy ordering rules:
+   * can only acquire locks higher than the maximum currently held lock.
+   * 
+   * Type-safe at compile-time: TypeScript validates lock ordering and prevents
+   * duplicate acquisitions. Runtime enforcement provides mutual exclusion.
+   * 
+   * @param lock - Lock level to acquire (must be higher than max held lock)
+   * @returns Promise resolving to new context with the additional read lock
+   * 
+   * @example
+   * ```ts
+   * const ctx = createLockContext();
+   * const ctx1 = await ctx.acquireRead(LOCK_1);
+   * const ctx3 = await ctx1.acquireRead(LOCK_3); // Can skip LOCK_2
+   * ctx3.dispose(); // ⚠️ Invalidates ctx3, ctx1, and ctx
+   * ```
+   */
   async acquireRead<TLock extends LockLevel>(
     lock: CanAcquireInternal<THeldLocks, TLock> extends true ? TLock : never
   ): Promise<LockContext<readonly [...THeldLocks, TLock]>> {
@@ -327,7 +347,28 @@ class LockContext<THeldLocks extends readonly LockLevel[] = readonly []> {
     return new LockContext([...this.heldLocks, lock] as const, newLockModes);
   }
 
-  // Acquire a write lock - COMPILE-TIME ONLY enforcement with runtime read/write semantics
+  /**
+   * Acquire a write lock on the specified lock level.
+   * 
+   * Write locks provide exclusive access, blocking all other readers and writers.
+   * Writers have preference: pending writers block new readers. The lock must
+   * satisfy ordering rules: can only acquire locks higher than the maximum
+   * currently held lock.
+   * 
+   * Type-safe at compile-time: TypeScript validates lock ordering and prevents
+   * duplicate acquisitions. Runtime enforcement provides mutual exclusion.
+   * 
+   * @param lock - Lock level to acquire (must be higher than max held lock)
+   * @returns Promise resolving to new context with the additional write lock
+   * 
+   * @example
+   * ```ts
+   * const ctx = createLockContext();
+   * const ctx1 = await ctx.acquireWrite(LOCK_1);
+   * const ctx13 = await ctx1.acquireWrite(LOCK_3); // Can skip LOCK_2
+   * ctx13.dispose(); // ⚠️ Invalidates ctx13, ctx1, and ctx
+   * ```
+   */
   async acquireWrite<TLock extends LockLevel>(
     lock: CanAcquireInternal<THeldLocks, TLock> extends true ? TLock : never
   ): Promise<LockContext<readonly [...THeldLocks, TLock]>> {
@@ -359,7 +400,7 @@ class LockContext<THeldLocks extends readonly LockLevel[] = readonly []> {
    *   // Safe: guaranteed to hold LOCK_1
    *   console.log('Critical section');
    * });
-   * ctx.dispose();
+   * ctx.dispose(); // ⚠️ Invalidates ctx and all previous contexts
    * ```
    */
   useLock<TLock extends LockLevel>(
@@ -424,7 +465,33 @@ class LockContext<THeldLocks extends readonly LockLevel[] = readonly []> {
     }
   }
 
-  // Rollback to a previous lock level - COMPILE-TIME ONLY enforcement
+  /**
+   * Roll back to a previously acquired lock, releasing all locks acquired after it.
+   * 
+   * Creates a new context containing only locks up to and including the target lock.
+   * All locks acquired after the target are automatically released in the correct order.
+   * Useful for unwinding nested lock acquisitions while maintaining earlier locks.
+   * 
+   * Type-safe at compile-time: TypeScript validates the target lock is actually held.
+   * Runtime enforcement ensures proper cleanup and resource disposal.
+   * 
+   * @param targetLock - Lock level to roll back to (must be currently held)
+   * @returns New context with locks up to and including the target lock
+   * @throws {Error} If target lock is not held by this context
+   * 
+   * @example
+   * ```ts
+   * const ctx = await createLockContext()
+   *   .acquireWrite(LOCK_1)
+   *   .then(c => c.acquireWrite(LOCK_3))
+   *   .then(c => c.acquireWrite(LOCK_5));
+   * // ctx holds [1, 3, 5]
+   * 
+   * const rolled = ctx.rollbackTo(LOCK_3);
+   * // rolled holds [1, 3], LOCK_5 was released
+   * rolled.dispose(); // ⚠️ Invalidates rolled and ctx (both share locks 1, 3)
+   * ```
+   */
   rollbackTo<TTarget extends LockLevel>(
     targetLock: Contains<THeldLocks, TTarget> extends true ? TTarget : never
   ): LockContext<PrefixUpTo<THeldLocks, TTarget>> {
@@ -461,9 +528,34 @@ class LockContext<THeldLocks extends readonly LockLevel[] = readonly []> {
     return new LockContext(newLocks as unknown as PrefixUpTo<THeldLocks, TTarget>, newLockModes);
   }
 
-  // Release a specific lock - COMPILE-TIME ONLY enforcement
-  // This allows releasing individual locks while maintaining the others
-  // Useful for temporary lock elevation: acquire lock 4, use it, release lock 4
+  /**
+   * Release a specific lock while maintaining all other held locks.
+   * 
+   * Removes the specified lock from the context, creating a new context without it.
+   * Unlike rollbackTo, this releases a single lock regardless of position, allowing
+   * flexible lock management patterns. Useful for temporary lock elevation where
+   * you acquire a higher lock, use it briefly, then release just that lock.
+   * 
+   * Type-safe at compile-time: TypeScript validates the lock is actually held.
+   * Runtime enforcement ensures proper cleanup and resource disposal.
+   * 
+   * @param lock - Lock level to release (must be currently held)
+   * @returns New context without the released lock
+   * @throws {Error} If lock is not held by this context
+   * 
+   * @example
+   * ```ts
+   * const ctx = await createLockContext()
+   *   .acquireWrite(LOCK_1)
+   *   .then(c => c.acquireWrite(LOCK_2))
+   *   .then(c => c.acquireWrite(LOCK_3));
+   * // ctx holds [1, 2, 3]
+   * 
+   * const ctx13 = ctx.releaseLock(LOCK_2);
+   * // ctx13 holds [1, 3], only LOCK_2 was released
+   * ctx13.dispose(); // ⚠️ Invalidates ctx13 and ctx (both share locks 1, 3)
+   * ```
+   */
   releaseLock<TLock extends LockLevel>(
     lock: Contains<THeldLocks, TLock> extends true ? TLock : never
   ): LockContext<RemoveElement<THeldLocks, TLock>> {
@@ -494,23 +586,106 @@ class LockContext<THeldLocks extends readonly LockLevel[] = readonly []> {
     return new LockContext(newLocks as unknown as RemoveElement<THeldLocks, TLock>, newLockModes);
   }
 
-  // Check if a specific lock is held
+  /**
+   * Check if a specific lock is currently held by this context.
+   * 
+   * Type-safe compile-time check that returns a boolean indicating lock presence.
+   * The return type is branded with the Contains type for additional type safety
+   * in conditional logic.
+   * 
+   * @param lock - Lock level to check
+   * @returns True if the lock is held, false otherwise (type-branded boolean)
+   * 
+   * @example
+   * ```ts
+   * const ctx = await createLockContext().acquireWrite(LOCK_1);
+   * if (ctx.hasLock(LOCK_1)) {
+   *   console.log('Have lock 1');
+   * }
+   * if (ctx.hasLock(LOCK_2)) {
+   *   console.log('This will not execute');
+   * }
+   * ctx.dispose(); // ⚠️ Invalidates ctx and all previous contexts
+   * ```
+   */
   hasLock<TLock extends LockLevel>(
     lock: TLock
   ): Contains<THeldLocks, TLock> {
     return this.heldLocks.includes(lock) as Contains<THeldLocks, TLock>;
   }
 
+  /**
+   * Get the array of all locks currently held by this context.
+   * 
+   * Returns the immutable tuple of lock levels in acquisition order.
+   * Useful for debugging, logging, or conditional logic based on lock state.
+   * 
+   * @returns Readonly tuple of held lock levels
+   * 
+   * @example
+   * ```ts
+   * const ctx = await createLockContext()
+   *   .acquireWrite(LOCK_1)
+   *   .then(c => c.acquireWrite(LOCK_3));
+   * console.log(ctx.getHeldLocks()); // [1, 3]
+   * ctx.dispose(); // ⚠️ Invalidates ctx and all previous contexts
+   * ```
+   */
   getHeldLocks(): THeldLocks {
     return this.heldLocks;
   }
 
-  // Get the maximum lock level currently held (0 if no locks held)
+  /**
+   * Get the maximum lock level currently held (0 if no locks held).
+   * 
+   * Returns the highest lock number in the context. Useful for determining
+   * what locks can still be acquired (must be higher than this value).
+   * 
+   * @returns Maximum lock level, or 0 if context is empty
+   * 
+   * @example
+   * ```ts
+   * const empty = createLockContext();
+   * console.log(empty.getMaxHeldLock()); // 0
+   * 
+   * const ctx = await empty.acquireWrite(LOCK_1).then(c => c.acquireWrite(LOCK_5));
+   * console.log(ctx.getMaxHeldLock()); // 5
+   * ctx.dispose(); // ⚠️ Invalidates ctx and empty
+   * ```
+   */
   getMaxHeldLock(): number {
     return this.heldLocks.length > 0 ? Math.max(...this.heldLocks) : 0;
   }
 
-  // Release all locks held by this context (cleanup)
+  /**
+   * Release all locks held by this context.
+   * 
+   * ⚠️ WARNING: This releases ALL locks held by this context, making this context
+   * AND all earlier contexts that led to it invalid/unusable. Once disposed, none
+   * of the contexts in the chain can be used anymore.
+   * 
+   * Disposes of the context by releasing all locks in the appropriate order
+   * (respecting read/write modes). Should be called when done with a context
+   * to free resources and allow other operations to proceed.
+   * 
+   * Best practices:
+   * - Use `useLockWithAcquire()` for automatic cleanup of temporary locks
+   * - Use `releaseLock()` to release individual locks while keeping others
+   * - Use try-finally only when you need to dispose the entire chain
+   * 
+   * @see {@link releaseLock} - Release a single lock while keeping others
+   * @see {@link useLockWithAcquire} - Scoped lock acquisition with automatic cleanup
+   * 
+   * @example
+   * ```ts
+   * const ctx = await createLockContext().acquireWrite(LOCK_1);
+   * try {
+   *   // Use the context
+   * } finally {
+   *   ctx.dispose(); // ⚠️ Releases ALL locks, invalidates entire chain
+   * }
+   * ```
+   */
   dispose(): void {
     for (const lock of this.heldLocks) {
       const mode = this.lockModes.get(lock);
@@ -522,13 +697,47 @@ class LockContext<THeldLocks extends readonly LockLevel[] = readonly []> {
     }
   }
 
-  // Get the mode of a specific held lock
+  /**
+   * Get the lock mode (read or write) of a specific held lock.
+   * 
+   * Type-safe at compile-time: TypeScript validates the lock is held.
+   * Returns the mode this lock was acquired in.
+   * 
+   * @param lock - Lock level to query (must be held)
+   * @returns 'read' or 'write', or undefined if lock data is missing
+   * 
+   * @example
+   * ```ts
+   * const ctx = await createLockContext().acquireRead(LOCK_1);
+   * console.log(ctx.getLockMode(LOCK_1)); // 'read'
+   * ctx.dispose(); // ⚠️ Invalidates ctx and all previous contexts
+   * ```
+   */
   getLockMode<TLock extends LockLevel>(
     lock: Contains<THeldLocks, TLock> extends true ? TLock : never
   ): LockMode | undefined {
     return this.lockModes.get(lock);
   }
 
+  /**
+   * Get a string representation of this context and global lock state.
+   * 
+   * Returns a formatted string showing:
+   * - Locks held by this context with their modes (R=read, W=write)
+   * - Global state showing all active locks across all contexts
+   * 
+   * Useful for debugging and logging lock state.
+   * 
+   * @returns Formatted string representation
+   * 
+   * @example
+   * ```ts
+   * const ctx = await createLockContext().acquireWrite(LOCK_1);
+   * console.log(ctx.toString());
+   * // "LockContext[1W] (global: [1W])"
+   * ctx.dispose(); // ⚠️ Invalidates ctx and all previous contexts
+   * ```
+   */
   toString(): string {
     const globalState = this.manager.getGlobalLocks();
     const readerSummary = Array.from(globalState.readers.entries())
@@ -550,6 +759,23 @@ class LockContext<THeldLocks extends readonly LockLevel[] = readonly []> {
   }
 }
 
+/**
+ * Create a new empty lock context.
+ * 
+ * Factory function that creates a LockContext with no locks held. This is the
+ * starting point for all lock acquisition. From an empty context, you can acquire
+ * any lock level.
+ * 
+ * @returns New empty LockContext ready for lock acquisition
+ * 
+ * @example
+ * ```ts
+ * const ctx = createLockContext();
+ * const ctx1 = await ctx.acquireWrite(LOCK_1);
+ * const ctx3 = await ctx1.acquireWrite(LOCK_3); // Can skip LOCK_2
+ * ctx3.dispose(); // ⚠️ Invalidates ctx3, ctx1, and ctx
+ * ```
+ */
 function createLockContext(): LockContext<readonly []> {
   return new LockContext([] as const);
 }
