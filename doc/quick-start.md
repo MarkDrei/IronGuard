@@ -119,33 +119,125 @@ const ctx135 = await ctx1.acquireWrite(LOCK_3).then(c => c.acquireWrite(LOCK_5))
 await middleProcessor(ctx135); // ✅ [1,3,5] is in LocksAtMost5
 ```
 
-### 5. Ensuring Specific Locks Are Held (HasLockXContext)
+### 5. Flexible Contexts with Required Locks (LocksAtMostAndHasX)
 
-Sometimes you need to ensure a function is only called when a specific lock is already held. Use `HasLockXContext` types:
+When you need a function that:
+- **MUST** have a specific lock held
+- **MAY** have any combination of locks below that level
+- **CAN** acquire new locks higher than the required level
+
+Use `LocksAtMostAndHasX` types (available for locks 1-9):
 
 ```typescript
-import type { HasLock3Context, HasLock11Context } from './src/core';
+import type { LocksAtMostAndHas3, LocksAtMostAndHas6 } from './src/core';
+
+// Requires LOCK_3, flexible about locks 1-2
+async function processData(
+  ctx: LockContext<LocksAtMostAndHas3>
+): Promise<void> {
+  // TypeScript guarantees LOCK_3 is held
+  console.log('Processing with required LOCK_3');
+  
+  // Can acquire higher locks
+  const ctx5 = await ctx.acquireWrite(LOCK_5);
+  try {
+    console.log(`Now have: [${ctx5.getHeldLocks()}]`);
+  } finally {
+    ctx5.releaseLock(LOCK_5);
+  }
+}
+
+// Requires LOCK_6, flexible about locks 1-5
+async function handleResource(
+  ctx: LockContext<LocksAtMostAndHas6>
+): Promise<void> {
+  // LOCK_6 is guaranteed by type system
+  console.log('Accessing resource with LOCK_6');
+  
+  // Can acquire LOCK_8
+  await ctx.useLockWithAcquire(LOCK_8, async (ctx8) => {
+    console.log(`Extended to: [${ctx8.getHeldLocks()}]`);
+  });
+}
+
+// Usage examples - all valid!
+const ctx3 = await createLockContext().acquireWrite(LOCK_3);
+await processData(ctx3); // ✅ [3]
+
+const ctx13 = await createLockContext()
+  .acquireWrite(LOCK_1)
+  .then(c => c.acquireWrite(LOCK_3));
+await processData(ctx13); // ✅ [1, 3]
+
+const ctx123 = await ctx13.acquireWrite(LOCK_2);
+await processData(ctx123); // ✅ [1, 2, 3]
+
+// Invalid cases caught at compile-time
+const ctx1 = await createLockContext().acquireWrite(LOCK_1);
+// await processData(ctx1); // ❌ Compile error - missing LOCK_3
+
+const ctx5 = await createLockContext().acquireWrite(LOCK_5);
+// await processData(ctx5); // ❌ Compile error - missing LOCK_3
+```
+
+**When to use LocksAtMostAndHasX**:
+- Function requires a specific lock AND can acquire new locks
+- You want flexibility in what locks are held below the required level
+- Simpler than passing two parameters (one for checking, one for operations)
+- Perfect for plugin systems where you need a minimum lock level
+
+**Comparison with alternatives**:
+```typescript
+// ❌ Old approach: needed two parameters
+async function oldWay<THeld extends IronLocks>(
+  check: HasLock6Context<THeld>,  // For checking lock presence
+  ops: LockContext<LocksAtMost6>  // For performing operations
+): Promise<void> {
+  if (check.hasLock(LOCK_6)) {
+    await ops.useLockWithAcquire(LOCK_8, async (ctx) => {
+      // ...
+    });
+  }
+}
+
+// ✅ New approach: single parameter
+async function newWay(
+  ctx: LockContext<LocksAtMostAndHas6>
+): Promise<void> {
+  // LOCK_6 guaranteed, can acquire LOCK_8
+  await ctx.useLockWithAcquire(LOCK_8, async (ctx8) => {
+    // ...
+  });
+}
+```
+
+### 6. Ensuring Specific Locks Are Held (HasLockXContext)
+
+When you need to **check** that a specific lock is held but **NOT acquire new locks**, use `HasLockXContext` types. These are available for all lock levels 1-15:
+
+```typescript
+import type { HasLock3Context, HasLock11Context, IronLocks } from './src/core';
 
 // This function requires LOCK_3 to be held by the caller
+// ⚠️ Cannot acquire new locks - generic type prevents it
 function processData<THeld extends IronLocks>(
   ctx: HasLock3Context<THeld>
 ): void {
   // TypeScript guarantees LOCK_3 is present
-  ctx.useLock(LOCK_3, () => {
+  if (ctx.hasLock(LOCK_3)) {
     console.log('Processing with LOCK_3');
-    // Can safely access resources protected by LOCK_3
-  });
+    // Can check locks and use held locks
+    // ❌ Cannot call ctx.acquireWrite() - THeld is generic
+  }
 }
 
 // This function requires LOCK_11 to be held
-async function criticalOperation<THeld extends IronLocks>(
+function criticalOperation<THeld extends IronLocks>(
   ctx: HasLock11Context<THeld>
-): Promise<void> {
+): void {
   // TypeScript guarantees LOCK_11 is present
-  if (ctx.hasLock(LOCK_11)) {
-    console.log('Performing critical operation');
-    // Work with LOCK_11 protected resources
-  }
+  console.log('LOCK_11 is held');
+  // Can only use existing locks, not acquire new ones
 }
 
 // Usage examples
@@ -156,7 +248,7 @@ const ctx1 = await createLockContext().acquireWrite(LOCK_1);
 // processData(ctx1); // ❌ Compile error - LOCK_3 not held
 
 const ctx11 = await createLockContext().acquireWrite(LOCK_11);
-await criticalOperation(ctx11); // ✅ Compiles
+criticalOperation(ctx11); // ✅ Compiles
 
 const ctx13 = await ctx1.acquireWrite(LOCK_3);
 processData(ctx13); // ✅ Also works - LOCK_3 is held (along with LOCK_1)
@@ -164,11 +256,13 @@ processData(ctx13); // ✅ Also works - LOCK_3 is held (along with LOCK_1)
 
 **When to use HasLockXContext**:
 - You need compile-time guarantee that a specific lock is held
-- The function doesn't acquire locks itself, just uses existing ones
-- You want to enforce lock requirements for critical operations
-- You don't care what other locks are held
+- The function **only checks/uses existing locks**, doesn't acquire new ones
+- You want to enforce lock requirements for critical read-only operations
+- Available for all 15 lock levels: `HasLock1Context` through `HasLock15Context`
 
-### 6. Complete Example Flow
+**Key limitation**: The generic type parameter `<THeld extends IronLocks>` prevents acquiring new locks. If you need to acquire locks, use `LocksAtMostAndHasX` instead (available for locks 1-9).eter `<THeld extends IronLocks>` prevents acquiring new locks. If you need to acquire locks, use `LocksAtMostAndHasX` instead (available for locks 1-9).
+
+### 7. Complete Example Flow
 
 Combining all patterns from MarksExample.ts:
 

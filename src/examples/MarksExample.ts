@@ -29,6 +29,7 @@ import type {
     HasLock11Context,
     IronLocks,
     LocksAtMost5,
+    LocksAtMostAndHas6,
     NullableLocksAtMost10
 } from '../core/ironGuardTypes';
 
@@ -175,8 +176,34 @@ async function middleProcessorUseLock(context: LockContext<LocksAtMost5>): Promi
     await context.useLockWithAcquire(LOCK_6, async (withLock6) => {
         console.log(`  Step 2 (useLock) >>> current locks: [${withLock6.getHeldLocks()}]`);
         await finalProcessor(withLock6);
+        await hasLock6Example(withLock6);
         console.log(`  Step 2 (useLock) <<< current locks: [${withLock6.getHeldLocks()}]`);
     });
+
+    await context.useLockWithAcquire(LOCK_12, async (withLock12) => {
+        console.log(`  Step 2b (useLock) >>> current locks: [${withLock12.getHeldLocks()}]`);
+    });
+}
+
+async function hasLock6Example(context: LockContext<LocksAtMostAndHas6>) : Promise<void> {
+    // ✅ LocksAtMostAndHas6 guarantees LOCK_6 is held and accepts any combination of locks 1-5
+    // Valid contexts: [6], [1,6], [2,6], [1,2,6], [3,6], [1,3,6], [2,3,6], [1,2,3,6], etc.
+    // This combines the flexibility of LocksAtMost with the requirement of HasLock
+    
+    if (context.hasLock(LOCK_6)) {
+        console.log('    ✓ Context has LOCK_6');
+    }
+
+    // With LocksAtMostAndHas6, we can use the same context for both checking and operations
+    context.useLockWithAcquire(LOCK_12, async (withLock12) => {
+        console.log(`    step hasLock6Example >>> acquired LOCK_12: [${withLock12.getHeldLocks()}]`);
+    });
+
+    // ❌ COMPILE-TIME ERROR: Uncommenting this would fail TypeScript compilation
+    // context.acquireRead(LOCK_1);
+    // context.acquireRead(LOCK_3);
+    // context.acquireRead(LOCK_6);
+
 }
 
 

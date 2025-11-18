@@ -505,6 +505,30 @@ async function test() {
   await ctx258.useLockWithAcquire(LOCK_1, async () => {}); // Should fail: 2,5,8 → 1
 }
 `
+  },
+  {
+    name: 'LocksAtMostAndHas6: Cannot pass context without LOCK_6',
+    code: `
+import { createLockContext, LOCK_1, LOCK_3, type LockContext, type LocksAtMostAndHas6 } from 'src/core';
+async function needsLock6(ctx: LockContext<LocksAtMostAndHas6>): Promise<void> {}
+async function test() {
+  const ctx13 = await createLockContext().acquireWrite(LOCK_1).then(c => c.acquireWrite(LOCK_3));
+  await needsLock6(ctx13); // Should fail: context doesn't have required LOCK_6
+}
+`
+  },
+  {
+    name: 'LocksAtMostAndHas3: Cannot pass context with only LOCK_1',
+    code: `
+import { createLockContext, LOCK_1, type LockContext, type LocksAtMostAndHas3 } from 'src/core';
+async function requiresLock3(ctx: LockContext<LocksAtMostAndHas3>): Promise<void> {
+  // Function expects LOCK_3 to be present
+}
+async function test() {
+  const ctx1 = await createLockContext().acquireWrite(LOCK_1);
+  await requiresLock3(ctx1); // Should fail: has LOCK_1 but missing required LOCK_3
+}
+`
   }
 ];
 

@@ -146,6 +146,7 @@ npm run build
 - **[Lock Context Transfer Patterns](doc/context-transfer-patterns.md)** - Guide to passing contexts between functions using LocksAtMost and NullableLocksAtMost types
 - **[Read/Write Lock Best Practices](doc/read-write-best-practices.md)** - Concurrent readers and writer preference
 - **[Compile-time Testing Guide](doc/compile-time-testing.md)** - How to validate TypeScript lock safety
+- **[Changelog](CHANGELOG.md)** - Version history and release notes
 
 ## License
 
