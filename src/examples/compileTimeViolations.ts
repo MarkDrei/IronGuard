@@ -6,7 +6,7 @@
  * are commented out - uncomment them to see TypeScript compilation errors!
  */
 
-import { createLockContext, LOCK_1, LOCK_2, LOCK_3, LOCK_4, LOCK_5 } from '../core';
+import { createLockContext, LOCK_1, LOCK_2, LOCK_3, LOCK_4, LOCK_5 } from '../index';
 
 async function demonstrateCompileTimeViolations(): Promise<void> {
   console.log('\n❌ Compile-Time Violations Demo');

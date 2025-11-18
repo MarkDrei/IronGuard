@@ -17,7 +17,7 @@ import {
   LOCK_15,
   type Contains,
   type LockLevel
-} from '../core';
+} from '../index';
 
 // Example 1: Function that requires a specific lock
 function functionRequiringLock2<THeld extends readonly LockLevel[]>(

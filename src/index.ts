@@ -30,13 +30,14 @@ export {
   LOCK_15
 } from './core/ironGuardSystem';
 
-// Flexible lock context types for function signatures
+// Utility types for function constraints
 export type {
-
+  Contains
 } from './core/ironGuardSystem';
 
 // Utility building blocks for advanced usage
 export type {
+  IronLocks,
   HasLock,
   IsEmpty,
   MaxHeldLock,
@@ -71,5 +72,16 @@ export type {
   HasLock12Context,
   HasLock13Context,
   HasLock14Context,
-  HasLock15Context
+  HasLock15Context,
+
+  // LocksAtMostAndHas types
+  LocksAtMostAndHas1,
+  LocksAtMostAndHas2,
+  LocksAtMostAndHas3,
+  LocksAtMostAndHas4,
+  LocksAtMostAndHas5,
+  LocksAtMostAndHas6,
+  LocksAtMostAndHas7,
+  LocksAtMostAndHas8,
+  LocksAtMostAndHas9
 } from './core/ironGuardTypes';

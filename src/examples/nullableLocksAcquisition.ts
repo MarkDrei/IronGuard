@@ -13,7 +13,7 @@ import {
   type LockContext,
   type LockLevel,
   type NullableLocksAtMost12
-} from '../core';
+} from '../index';
 
 /**
  * Process data and acquire additional lock if safe.

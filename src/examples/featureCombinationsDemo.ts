@@ -1,4 +1,4 @@
-import { createLockContext, LOCK_1, LOCK_3, LOCK_5, LOCK_8 } from '../core';
+import { createLockContext, LOCK_1, LOCK_3, LOCK_5, LOCK_8 } from '../index';
 
 export async function demonstrateFeatureCombinations(): Promise<void> {
   console.log('\n Feature Combinations Demo');

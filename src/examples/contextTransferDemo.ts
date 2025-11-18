@@ -27,7 +27,7 @@ import {
   type LockContext,
   type Contains,
   type LockLevel
-} from '../core';
+} from '../index';
 
 // =============================================================================
 // FUNCTION DEFINITIONS - Context-aware functions with lock requirements

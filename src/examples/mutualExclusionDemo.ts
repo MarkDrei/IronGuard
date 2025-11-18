@@ -5,7 +5,7 @@
  * One thread must wait for the other to release the lock before proceeding.
  */
 
-import { createLockContext, LOCK_3 } from '../core';
+import { createLockContext, LOCK_3 } from '../index';
 
 async function demonstrateMutualExclusion(): Promise<void> {
   console.log('\n🔒 Mutual Exclusion Demo: Two Threads');

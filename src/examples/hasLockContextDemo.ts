@@ -27,7 +27,7 @@ import {
   type HasLock5Context,
   HasLock,
   LockContext
-} from '../core';
+} from '../index';
 
 console.log('=== HasLockXContext Pattern Demo ===\n');
 

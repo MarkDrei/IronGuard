@@ -15,7 +15,7 @@ import {
   LOCK_3,
   LOCK_4,
   LOCK_5
-} from '../core';
+} from '../index';
 
 async function main() {
   console.log('🔓 Individual Lock Release Demo\n');

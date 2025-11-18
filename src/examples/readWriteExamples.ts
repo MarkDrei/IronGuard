@@ -17,7 +17,7 @@ import {
   LOCK_5,
   type LockContext,
   type LockLevel
-} from '../core';
+} from '../index';
 
 // Example 1: Database-style read/write access pattern
 async function databaseAccessDemo(): Promise<void> {

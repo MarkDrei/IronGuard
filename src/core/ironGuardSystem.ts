@@ -742,6 +742,5 @@ export type {
   LockLevel,
   LockMode,
   Contains,
-  PrefixUpTo,
   RemoveElement
 };

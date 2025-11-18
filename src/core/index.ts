@@ -30,7 +30,6 @@ export {
 export type {
   LockLevel,
   Contains,
-  PrefixUpTo,
 } from './ironGuardSystem';
 
 // Advanced constraint types
