@@ -36,6 +36,7 @@ export type {
 // Advanced constraint types
 export type {
   // Building blocks
+  IronLocks,
   HasLock,
   IsEmpty,
   MaxHeldLock,
@@ -72,5 +73,16 @@ export type {
   HasLock12Context,
   HasLock13Context,
   HasLock14Context,
-  HasLock15Context
+  HasLock15Context,
+
+  // LocksAtMostAndHas types
+  LocksAtMostAndHas1,
+  LocksAtMostAndHas2,
+  LocksAtMostAndHas3,
+  LocksAtMostAndHas4,
+  LocksAtMostAndHas5,
+  LocksAtMostAndHas6,
+  LocksAtMostAndHas7,
+  LocksAtMostAndHas8,
+  LocksAtMostAndHas9
 } from './ironGuardTypes';

@@ -309,6 +309,93 @@ type NullableLocksAtMost15<THeld extends IronLocks> =
     : null;
 
 // =============================================================================
+// LOCKSATMOST AND HAS TYPES - Flexible contexts that must hold a specific lock
+// =============================================================================
+
+/**
+ * Helper type that appends a required lock to all ordered subsequences.
+ *
+ * This type takes all ordered subsequences of locks below a certain level
+ * and appends the required lock to each combination, guaranteeing that
+ * the required lock is always present.
+ *
+ * @template Prefix - The ordered subsequences to prepend (e.g., OrderedSubsequences<[1,2,3]>)
+ * @template Required - The lock level that must be present
+ *
+ * @example
+ * ```typescript
+ * // For Required = 4, Prefix = OrderedSubsequences<[1,2,3]>
+ * // Produces: [4] | [1,4] | [2,4] | [3,4] | [1,2,4] | [1,3,4] | [2,3,4] | [1,2,3,4]
+ * type Example = AppendRequiredLock<OrderedSubsequences<readonly [1,2,3]>, 4>;
+ * ```
+ */
+type AppendRequiredLock<
+  Prefix extends readonly number[],
+  Required extends number
+> = Prefix extends readonly number[]
+  ? readonly [...Prefix, Required]
+  : never;
+
+/**
+ * LocksAtMostAndHasX types combine flexibility with required lock presence.
+ *
+ * These types represent lock contexts that:
+ * - MUST hold a specific lock level X
+ * - MAY hold any ordered combination of locks below X
+ *
+ * For example, LocksAtMostAndHas6 accepts:
+ * [6], [1,6], [2,6], [3,6], [4,6], [5,6], [1,2,6], [1,3,6], [1,4,6], [1,5,6],
+ * [2,3,6], [2,4,6], [2,5,6], [3,4,6], [3,5,6], [4,5,6], [1,2,3,6], ...
+ *
+ * This is useful for functions that need a specific lock but should be flexible
+ * about what other locks are held below that level.
+ *
+ * @example
+ * ```typescript
+ * async function processWithLock6(
+ *   ctx: LockContext<LocksAtMostAndHas6>
+ * ): Promise<void> {
+ *   // TypeScript guarantees LOCK_6 is held
+ *   // Context may also hold any combination of LOCK_1 through LOCK_5
+ *   ctx.useLock(LOCK_6, () => {
+ *     console.log('Processing with required LOCK_6');
+ *   });
+ * }
+ * ```
+ *
+ * Implementation: Uses OrderedSubsequences to generate all combinations below
+ * the required lock level, then appends the required lock to each combination.
+ * This is more maintainable than manually listing all combinations.
+ */
+
+/** Context that must hold LOCK_1, may hold any ordered combination below */
+type LocksAtMostAndHas1 = AppendRequiredLock<LocksAtMost0, 1>;
+
+/** Context that must hold LOCK_2, may hold any ordered combination below (LOCK_1) */
+type LocksAtMostAndHas2 = AppendRequiredLock<LocksAtMost1, 2>;
+
+/** Context that must hold LOCK_3, may hold any ordered combination below (LOCK_1-2) */
+type LocksAtMostAndHas3 = AppendRequiredLock<LocksAtMost2, 3>;
+
+/** Context that must hold LOCK_4, may hold any ordered combination below (LOCK_1-3) */
+type LocksAtMostAndHas4 = AppendRequiredLock<LocksAtMost3, 4>;
+
+/** Context that must hold LOCK_5, may hold any ordered combination below (LOCK_1-4) */
+type LocksAtMostAndHas5 = AppendRequiredLock<LocksAtMost4, 5>;
+
+/** Context that must hold LOCK_6, may hold any ordered combination below (LOCK_1-5) */
+type LocksAtMostAndHas6 = AppendRequiredLock<LocksAtMost5, 6>;
+
+/** Context that must hold LOCK_7, may hold any ordered combination below (LOCK_1-6) */
+type LocksAtMostAndHas7 = AppendRequiredLock<LocksAtMost6, 7>;
+
+/** Context that must hold LOCK_8, may hold any ordered combination below (LOCK_1-7) */
+type LocksAtMostAndHas8 = AppendRequiredLock<LocksAtMost7, 8>;
+
+/** Context that must hold LOCK_9, may hold any ordered combination below (LOCK_1-8) */
+type LocksAtMostAndHas9 = AppendRequiredLock<LocksAtMost8, 9>;
+
+// =============================================================================
 // EXPORTS
 // =============================================================================
 export type {
@@ -353,5 +440,16 @@ export type {
   NullableLocksAtMost12,
   NullableLocksAtMost13,
   NullableLocksAtMost14,
-  NullableLocksAtMost15
+  NullableLocksAtMost15,
+
+  // LocksAtMostAndHas types
+  LocksAtMostAndHas1,
+  LocksAtMostAndHas2,
+  LocksAtMostAndHas3,
+  LocksAtMostAndHas4,
+  LocksAtMostAndHas5,
+  LocksAtMostAndHas6,
+  LocksAtMostAndHas7,
+  LocksAtMostAndHas8,
+  LocksAtMostAndHas9
 };
