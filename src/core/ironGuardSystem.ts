@@ -236,14 +236,6 @@ type Contains<T extends readonly unknown[], U> = T extends readonly [infer First
     : Contains<Rest, U>
   : false;
 
-// Extract prefix of array up to and including the target element
-type PrefixUpTo<T extends readonly unknown[], Target> =
-  T extends readonly [infer First, ...infer Rest]
-    ? First extends Target
-      ? readonly [First]  // Found target, include it and stop
-      : readonly [First, ...PrefixUpTo<Rest, Target>]
-    : readonly [];  // Target not found, return empty
-
 // Remove a specific element from an array (for releasing individual locks)
 type RemoveElement<T extends readonly unknown[], Target> =
   T extends readonly [infer First, ...infer Rest]
