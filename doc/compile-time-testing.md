@@ -42,7 +42,7 @@ Edit `scripts/test-compile-time.js`:
 {
   name: 'Your test description',
   code: `
-import { createLockContext, LOCK_1 } from '../src/core';
+import { createLockContext, LOCK_1 } from 'src';
 async function test() {
   // Invalid code that should fail compilation
 }

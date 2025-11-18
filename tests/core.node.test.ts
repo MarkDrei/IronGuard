@@ -9,7 +9,7 @@
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
-import { createLockContext, LOCK_1, LOCK_2, LOCK_3, LOCK_4, LOCK_5, LOCK_6, LOCK_7, LOCK_8, LOCK_9, LOCK_10, LOCK_11, LOCK_12, LOCK_13, LOCK_14, LOCK_15 } from '../src/core';
+import { createLockContext, LOCK_1, LOCK_2, LOCK_3, LOCK_4, LOCK_5, LOCK_6, LOCK_7, LOCK_8, LOCK_9, LOCK_10, LOCK_11, LOCK_12, LOCK_13, LOCK_14, LOCK_15 } from '../src';
 
 describe('IronGuard Core System', () => {
   describe('Basic Lock Operations', () => {

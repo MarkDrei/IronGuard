@@ -27,7 +27,7 @@ import {
   type LocksAtMostAndHas6,
   type LocksAtMostAndHas8,
   type IronLocks
-} from '../src/core';
+} from '../src';
 
 describe('HasLockX Context Types', () => {
   test('should accept context with required lock - HasLock3Context', async () => {

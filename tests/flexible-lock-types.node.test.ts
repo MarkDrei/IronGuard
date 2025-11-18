@@ -20,7 +20,7 @@ import {
   LOCK_5,
   type LocksAtMost3,
   type LocksAtMost5
-} from '../src/core';
+} from '../src';
 
 describe('LocksAtMost3 Type', () => {
   test('should accept empty context', async () => {
