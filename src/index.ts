@@ -7,6 +7,7 @@
 export {
   createLockContext,
   LockContext,
+  IronGuardManager,
   type LockLevel,
   type LockMode
 } from './core/ironGuardSystem';

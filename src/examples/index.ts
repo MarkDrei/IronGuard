@@ -32,6 +32,7 @@ import { runFlexibleLockTypesDemo } from './flexibleLockTypesDemo';
 import { runHasLockContextDemo } from './hasLockContextDemo';
 import { runMarksExample } from './MarksExample';
 import { runUseLockRuntimeDemo } from './useLockRuntimeDemo';
+import { demonstrateDebugInfo } from './debug-demo';
 
 async function main(): Promise<void> {
 
@@ -68,6 +69,9 @@ async function main(): Promise<void> {
 
   // useLock() runtime safety demo
   await runUseLockRuntimeDemo();
+
+  // Debug mode and stack trace capture demo
+  await demonstrateDebugInfo();
   
   console.log('\n=== Key Benefits ===');
   console.log('✓ Runtime mutual exclusion (real thread safety)');

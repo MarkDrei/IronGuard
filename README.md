@@ -143,6 +143,7 @@ npm run build
 ## Documentation
 
 - **[Quick Start Guide](doc/quick-start.md)** - Essential features and usage patterns
+- **[Debugging Guide](doc/debugging-guide.md)** - Debug mode and stack trace capture for lock analysis
 - **[Lock Context Transfer Patterns](doc/context-transfer-patterns.md)** - Guide to passing contexts between functions using LocksAtMost and NullableLocksAtMost types
 - **[Read/Write Lock Best Practices](doc/read-write-best-practices.md)** - Concurrent readers and writer preference
 - **[Compile-time Testing Guide](doc/compile-time-testing.md)** - How to validate TypeScript lock safety

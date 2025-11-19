@@ -54,6 +54,15 @@ const LOCK_15 = 15 as const;
 // Read/Write lock mode type
 type LockMode = 'read' | 'write';
 
+// Global lock state type for debug information
+type GlobalLockState = {
+  readers: Map<LockLevel, number>;
+  writers: Set<LockLevel>;
+  pendingWriters: Map<LockLevel, number>;
+  readerStacks?: Map<LockLevel, string[]>;
+  writerStacks?: Map<LockLevel, string>;
+};
+
 // Global lock manager for runtime read/write lock management with writer preference
 // Automatically supports any configured lock levels
 class IronGuardManager {
@@ -62,12 +71,28 @@ class IronGuardManager {
   private activeWriters = new Set<LockLevel>();
   private pendingWriters = new Map<LockLevel, Array<() => void>>();
   private pendingReaders = new Map<LockLevel, Array<() => void>>();
+  private debugMode = false;
+  private readerStacks = new Map<LockLevel, string[]>();
+  private writerStacks = new Map<LockLevel, string>();
 
   static getInstance(): IronGuardManager {
     if (!IronGuardManager.instance) {
       IronGuardManager.instance = new IronGuardManager();
     }
     return IronGuardManager.instance;
+  }
+
+  // Enable debug mode to capture stack traces for lock acquisitions
+  enableDebugMode(): void {
+    this.debugMode = true;
+  }
+
+  // Disable debug mode
+  disableDebugMode(): void {
+    this.debugMode = false;
+    // Clear existing stacks
+    this.readerStacks.clear();
+    this.writerStacks.clear();
   }
 
   // Acquire a read lock - allows concurrent readers unless writer is waiting/active
@@ -79,6 +104,18 @@ class IronGuardManager {
 
     // Grant read lock
     this.incrementReaderCount(lock);
+
+    // Capture stack trace if debug mode enabled
+    if (this.debugMode) {
+      const stack = new Error().stack || 'No stack trace available';
+      if (!this.readerStacks.has(lock)) {
+        this.readerStacks.set(lock, []);
+      }
+      const stackArray = this.readerStacks.get(lock);
+      if (stackArray) {
+        stackArray.push(stack);
+      }
+    }
   }
 
   // Acquire a write lock - waits for all readers and other writers, has preference
@@ -94,6 +131,12 @@ class IronGuardManager {
 
       // Grant write lock
       this.activeWriters.add(lock);
+
+      // Capture stack trace if debug mode enabled
+      if (this.debugMode) {
+        const stack = new Error().stack || 'No stack trace available';
+        this.writerStacks.set(lock, stack);
+      }
     } finally {
       // Remove from pending queue
       this.removeFromPendingWriters(lock);
@@ -109,6 +152,17 @@ class IronGuardManager {
       this.readerCounts.set(lock, currentCount - 1);
     }
 
+    // Remove stack trace if debug mode enabled
+    if (this.debugMode) {
+      const stacks = this.readerStacks.get(lock);
+      if (stacks && stacks.length > 0) {
+        stacks.pop();
+        if (stacks.length === 0) {
+          this.readerStacks.delete(lock);
+        }
+      }
+    }
+
     // If no more readers, notify waiting writers
     if (!this.hasActiveReaders(lock)) {
       this.notifyWaitingWriters(lock);
@@ -118,6 +172,11 @@ class IronGuardManager {
   // Release a write lock
   releaseWriteLock(lock: LockLevel): void {
     this.activeWriters.delete(lock);
+
+    // Remove stack trace if debug mode enabled
+    if (this.debugMode) {
+      this.writerStacks.delete(lock);
+    }
 
     // Notify waiting writers first (writer preference), then readers
     if (this.hasPendingWriters(lock)) {
@@ -209,11 +268,7 @@ class IronGuardManager {
   }
 
   // Debug method to check current lock state
-  getGlobalLocks(): {
-    readers: Map<LockLevel, number>;
-    writers: Set<LockLevel>;
-    pendingWriters: Map<LockLevel, number>;
-    } {
+  getGlobalLocks(): GlobalLockState {
     const pendingWriterCounts = new Map<LockLevel, number>();
     for (const [lock, queue] of this.pendingWriters) {
       if (queue.length > 0) {
@@ -221,11 +276,18 @@ class IronGuardManager {
       }
     }
 
-    return {
+    const result: GlobalLockState = {
       readers: new Map(this.readerCounts),
       writers: new Set(this.activeWriters),
       pendingWriters: pendingWriterCounts
     };
+
+    if (this.debugMode) {
+      result.readerStacks = new Map(this.readerStacks);
+      result.writerStacks = new Map(this.writerStacks);
+    }
+
+    return result;
   }
 }
 
@@ -713,6 +775,7 @@ function createLockContext(): LockContext<readonly []> {
 export {
   LockContext,
   createLockContext,
+  IronGuardManager,
   LOCK_1,
   LOCK_2,
   LOCK_3,

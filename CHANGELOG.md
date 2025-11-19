@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3] - 2025-11-16
+
+### Added
+- **Debug Mode**: Optional stack trace capture for lock acquisitions to aid in debugging deadlock scenarios
+  - `IronGuardManager.enableDebugMode()` and `disableDebugMode()` methods
+  - Enhanced `getGlobalLocks()` method returns stack traces when debug mode is enabled
+  - Stack traces show exactly where locks were acquired in the codebase
+  - Minimal runtime overhead - only active when explicitly enabled
+  - Automatic cleanup of stack traces when locks are released
+- **Debug Demo**: Interactive example (`src/examples/debug-demo.ts`) demonstrating debug mode functionality
+- **Debugging Guide**: Comprehensive documentation (`doc/debugging-guide.md`) explaining debug mode usage
+- Exported `IronGuardManager` from main module for debug access
+
+
 ## [0.2.2] - 2025-11-16
 
 ### Added
