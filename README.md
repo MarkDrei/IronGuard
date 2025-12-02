@@ -39,10 +39,11 @@ Deadlocks occur when two or more operations wait for each other to release resou
 
 ### Classic Deadlock Scenario
 
-Consider two threads accessing shared resources:
+Consider two threads accessing shared resources (e.g., bank accounts):
 
 ```typescript
 // ❌ DEADLOCK SCENARIO (without IronGuard)
+// accountA and accountB represent shared resources (e.g., bank accounts)
 
 // Thread 1's execution path:
 async function transferMoney() {
@@ -163,7 +164,7 @@ Compile-time ordering prevents deadlocks, but you still need **mutual exclusion*
 const operation1 = async () => {
   const ctx = await createLockContext().acquireWrite(LOCK_5);
   console.log('Operation 1: Got LOCK_5, performing work...');
-  await simulateWork(100); // Critical section
+  await new Promise(resolve => setTimeout(resolve, 100)); // Critical section
   ctx.dispose();
   console.log('Operation 1: Released LOCK_5');
 };
@@ -171,7 +172,7 @@ const operation1 = async () => {
 const operation2 = async () => {
   const ctx = await createLockContext().acquireWrite(LOCK_5);
   console.log('Operation 2: Got LOCK_5, performing work...');
-  await simulateWork(100); // Critical section
+  await new Promise(resolve => setTimeout(resolve, 100)); // Critical section
   ctx.dispose();
   console.log('Operation 2: Released LOCK_5');
 };
@@ -219,7 +220,11 @@ ctx13.releaseLock(LOCK_3);  // Release only LOCK_3, keep LOCK_1
 Functions can declare their lock requirements, and TypeScript validates callers:
 
 ```typescript
-import type { LocksAtMost5 } from '@markdrei/ironguard-typescript-locks';
+import { 
+  createLockContext,
+  type LockContext,
+  type LocksAtMost5 
+} from '@markdrei/ironguard-typescript-locks';
 
 // This function accepts contexts holding locks 1-5
 // and can acquire locks 6+
