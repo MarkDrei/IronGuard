@@ -222,6 +222,11 @@ Functions can declare their lock requirements, and TypeScript validates callers:
 ```typescript
 import { 
   createLockContext,
+  LOCK_1,
+  LOCK_3,
+  LOCK_5,
+  LOCK_6,
+  LOCK_8,
   type LockContext,
   type LocksAtMost5 
 } from '@markdrei/ironguard-typescript-locks';
