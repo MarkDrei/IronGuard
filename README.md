@@ -210,7 +210,8 @@ const ctx = await createLockContext()
   .then(c => c.acquireRead(LOCK_9));  // Read lock
 
 // ✅ Release individual locks while keeping others
-const ctx13 = await ctx1.acquireWrite(LOCK_3);
+const ctx1b = await createLockContext().acquireWrite(LOCK_1);
+const ctx13 = await ctx1b.acquireWrite(LOCK_3);
 ctx13.releaseLock(LOCK_3);  // Release only LOCK_3, keep LOCK_1
 // Now can re-acquire LOCK_3 or acquire LOCK_2
 ```
@@ -250,7 +251,8 @@ await processWithHigherLocks(ctx1);  // ✅ [1] ⊆ [1..5]
 const ctx3 = await createLockContext().acquireWrite(LOCK_3);
 await processWithHigherLocks(ctx3);  // ✅ [3] ⊆ [1..5]
 
-const ctx135 = await ctx1.acquireWrite(LOCK_3).then(c => c.acquireWrite(LOCK_5));
+const ctx1Again = await createLockContext().acquireWrite(LOCK_1);
+const ctx135 = await ctx1Again.acquireWrite(LOCK_3).then(c => c.acquireWrite(LOCK_5));
 await processWithHigherLocks(ctx135);  // ✅ [1,3,5] ⊆ [1..5]
 
 // Invalid call caught at compile time:
