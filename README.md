@@ -260,19 +260,6 @@ const ctx8 = await createLockContext().acquireWrite(LOCK_8);
 // await processWithHigherLocks(ctx8);  // ❌ Compile error: 8 ∉ [1..5]
 ```
 
-### Summary: Double Protection
-
-1. **Compile-Time (Deadlock Prevention)**
-   - TypeScript enforces ascending lock order
-   - Violations caught before code runs
-   - Impossible to create circular wait conditions
-
-2. **Runtime (Race Condition Prevention)**
-   - Async mutual exclusion via singleton lock manager
-   - Only one operation holds each lock at a time
-   - Automatic queuing for lock contention
-
-**Result**: You get both the safety guarantees (no deadlocks, no races) and type-safe APIs that catch mistakes before they reach production.
 
 ## What It Delivers
 
@@ -358,7 +345,7 @@ import type { NullableLocksAtMost10, NullableLocksAtMost15 } from '@markdrei/iro
 import type { HasLock3Context, HasLock11Context } from '@markdrei/ironguard-typescript-locks';
 ```
 
-## What's Missing
+## What's Not Included
 
 - Performance benchmarks for high-contention scenarios
 - Lock timeout/cancellation mechanisms
@@ -384,11 +371,11 @@ npm run build
 ## Documentation
 
 - **[Quick Start Guide](doc/quick-start.md)** - Essential features and usage patterns
-- **[Debugging Guide](doc/debugging-guide.md)** - Debug mode and stack trace capture for lock analysis
+- **[Changelog](CHANGELOG.md)** - Version history and release notes
 - **[Lock Context Transfer Patterns](doc/context-transfer-patterns.md)** - Guide to passing contexts between functions using LocksAtMost and NullableLocksAtMost types
 - **[Read/Write Lock Best Practices](doc/read-write-best-practices.md)** - Concurrent readers and writer preference
+- **[Debugging Guide](doc/debugging-guide.md)** - Debug mode and stack trace capture for lock analysis
 - **[Compile-time Testing Guide](doc/compile-time-testing.md)** - How to validate TypeScript lock safety
-- **[Changelog](CHANGELOG.md)** - Version history and release notes
 
 ## License
 
