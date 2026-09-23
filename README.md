@@ -1,12 +1,28 @@
 # 🛡️ IronGuard
 
-Unbreakable TypeScript compile-time lock order violation detection system with runtime mutual exclusion. Prevents both deadlocks (through compile-time validation) and race conditions (through async mutual exclusion).
+IronGuard is a focused TypeScript library for **async resource coordination with enforced lock hierarchy**. It prevents deadlocks through compile-time lock ordering checks and reduces race conditions through runtime mutual exclusion.
 
 ## Installation
 
 ```bash
 npm install @markdrei/ironguard-typescript-locks
 ```
+
+## Best Fit
+
+IronGuard is most useful when your codebase has a **small, stable hierarchy of shared resources** and you want that hierarchy enforced everywhere:
+
+- Stateful backends coordinating caches, ledgers, queues, or outbound side effects
+- Workflow/orchestration code that must always escalate resources in one direction
+- Plugin or extension points where callers must stay below a privilege threshold
+
+## Not a Fit
+
+IronGuard is not a general-purpose concurrency toolkit. It is usually the wrong choice when:
+
+- Your application does not already have a clear lock/resource hierarchy
+- You need per-entity locks for arbitrary IDs rather than a small ordered set of global gates
+- Simpler transaction boundaries, queues, or database primitives already solve the problem
 
 ## Quick Start
 
@@ -264,12 +280,14 @@ const ctx8 = await createLockContext().acquireWrite(LOCK_8);
 ## What It Delivers
 
 - **Compile-time deadlock prevention**: TypeScript type system enforces lock ordering
-- **Runtime thread safety**: Async mutual exclusion prevents race conditions  
+- **Runtime mutual exclusion**: Async critical sections reduce race conditions  
 - **Read/write lock semantics**: Concurrent readers with writer preference
 - **Context transfer validation**: Type-safe function parameters with lock requirements
 - **Flexible lock patterns**: Sequential acquisition, lock skipping, temporary elevation
+- **Stale-context runtime guards**: Prevents unsafe reuse after a derived context changes the active lock state
+- **Timeouts and cancellation**: Abort or time-box lock acquisition with standard async control flow
 - **15 lock levels supported**: LOCK_1 through LOCK_15 available
-- **Production-ready**: Clean API, comprehensive testing, proper resource management
+- **Focused infrastructure primitive**: Best suited to backends and orchestration code with explicit shared-resource ordering
 
 ## Core Features
 
@@ -303,6 +321,21 @@ const reader2 = await createLockContext().acquireRead(LOCK_3);  // ✅ Concurren
 // Writers get priority over new readers
 const writer = await createLockContext().acquireWrite(LOCK_3);  // ⏳ Waits for readers
 ```
+
+### Timeout and Cancellation Controls
+
+Lock acquisition supports `timeoutMs` and `AbortSignal`:
+
+```typescript
+const controller = new AbortController();
+
+const ctx = await createLockContext().acquireWrite(LOCK_3, {
+  timeoutMs: 250,
+  signal: controller.signal
+});
+```
+
+If a derived context is still active, earlier contexts are treated as stale until the active state returns to their snapshot.
 
 ### Context Transfer with Type Safety
 
@@ -348,7 +381,6 @@ import type { HasLock3Context, HasLock11Context } from '@markdrei/ironguard-type
 ## What's Not Included
 
 - Performance benchmarks for high-contention scenarios
-- Lock timeout/cancellation mechanisms
 - Lock priority/scheduling policies
 
 ## Commands
@@ -356,6 +388,9 @@ import type { HasLock3Context, HasLock11Context } from '@markdrei/ironguard-type
 ```bash
 # See IronGuard in action
 npm run examples
+
+# Run the realistic workflow coordination example
+npm run examples:workflow
 
 # Run all tests
 npm test

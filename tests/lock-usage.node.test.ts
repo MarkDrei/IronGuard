@@ -295,25 +295,34 @@ describe('Compile-time Lock Usage Checks', () => {
       // Dispose the context
       ctx2.dispose();
       
-      // ❌ At runtime, disposed contexts should not be used
-      // This is more of a runtime consideration, but the type system
-      // doesn't prevent using disposed contexts (that would require
-      // linear types which TypeScript doesn't have)
-      
-      // Note: This test documents the current limitation
-      assert.ok(true, 'Disposal behavior is runtime-only check');
+      assert.throws(() => {
+        ctx2.useLock(LOCK_2, () => {});
+      }, /already been disposed|no longer held at runtime/);
     });
 
-    test('should document type system limitations', async () => {
+    test('should prevent reusing stale parent contexts while a child state is active', async () => {
+      const ctx1 = await createLockContext().acquireWrite(LOCK_1);
+      const ctx13 = await ctx1.acquireWrite(LOCK_3);
+
+      assert.throws(() => ctx1.getHeldLocks(), /stale/);
+      assert.throws(() => ctx1.acquireWrite(LOCK_5), /stale/);
+
+      const restored = ctx13.releaseLock(LOCK_3);
+      assert.deepStrictEqual(restored.getHeldLocks(), [1]);
+      assert.deepStrictEqual(ctx1.getHeldLocks(), [1]);
+      ctx1.dispose();
+    });
+
+    test('should document the remaining type system limitations', async () => {
       // The type system prevents:
       // 1. Using non-held locks ✅
       // 2. Acquiring locks in wrong order ✅
       // 3. Duplicate acquisitions ✅
       
       // The type system cannot prevent:
-      // 1. Using disposed contexts (would need linear types)
-      // 2. Race conditions (handled by runtime)
-      // 3. Resource leaks (handled by runtime + manual disposal)
+      // 1. Race conditions outside IronGuard-managed critical sections
+      // 2. Resource leaks caused by never disposing a completed lineage
+      // 3. Unsafe casts that bypass the compile-time model
       
       const ctx = await createLockContext().acquireWrite(LOCK_1);
       ctx.dispose();

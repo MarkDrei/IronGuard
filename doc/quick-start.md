@@ -1,6 +1,6 @@
 # IronGuard Quick Start Guide
 
-This guide covers the essential patterns for using IronGuard's lock ordering system safely and effectively.
+This guide covers the essential patterns for using IronGuard's lock ordering system safely and effectively in backends and orchestration code.
 
 ## Installation & Setup
 
@@ -16,6 +16,7 @@ npm run examples  # See all features in action
 - **Compile Time Deadlock Prevention**: TypeScript prevents lock ordering violations at compile-time
 - **Lock Ordering**: Must acquire locks in ascending order (can skip levels)
 - **Runtime Safety**: Async mutual exclusion prevents race conditions
+- **Linear Runtime State**: Older contexts become stale while a newer derived lock state is active
 
 ## Key Usage Patterns
 
@@ -24,7 +25,7 @@ npm run examples  # See all features in action
 The safest pattern uses `useLockWithAcquire()` for automatic cleanup:
 
 ```typescript
-import { createLockContext, LOCK_1, LOCK_3 } from './src/core';
+import { createLockContext, LOCK_1, LOCK_3 } from '@markdrei/ironguard-typescript-locks';
 
 const ctx0 = createLockContext();
 
@@ -87,12 +88,28 @@ ctx135.dispose(); // ⚠️ Releases ALL locks: 5, 3, AND 1
 - Prefer `releaseLock()` for individual locks
 - Prefer `useLockWithAcquire()` for automatic cleanup
 
-### 4. Passing Locks Between Functions
+### 4. Stale Context Protection
+
+IronGuard now treats the latest lock state in a lineage as the only active runtime state:
+
+```typescript
+const ctx1 = await createLockContext().acquireWrite(LOCK_1);
+const ctx13 = await ctx1.acquireWrite(LOCK_3);
+
+// ctx1 is stale while ctx13 is the active lock state
+// ctx1.getHeldLocks(); // ❌ Runtime error
+
+ctx13.releaseLock(LOCK_3);
+ctx1.getHeldLocks(); // ✅ Active again because the lineage returned to [1]
+ctx1.dispose();
+```
+
+### 5. Passing Locks Between Functions
 
 Functions can accept flexible lock states using `LocksAtMost` types:
 
 ```typescript
-import type { LocksAtMost5 } from './src/core';
+import type { LocksAtMost5 } from '@markdrei/ironguard-typescript-locks';
 
 // Accepts any ordered combination of locks 1-5
 async function middleProcessor(context: LockContext<LocksAtMost5>): Promise<void> {
@@ -119,7 +136,7 @@ const ctx135 = await ctx1.acquireWrite(LOCK_3).then(c => c.acquireWrite(LOCK_5))
 await middleProcessor(ctx135); // ✅ [1,3,5] is in LocksAtMost5
 ```
 
-### 5. Flexible Contexts with Required Locks (LocksAtMostAndHasX)
+### 6. Flexible Contexts with Required Locks (LocksAtMostAndHasX)
 
 When you need a function that:
 - **MUST** have a specific lock held
@@ -129,7 +146,7 @@ When you need a function that:
 Use `LocksAtMostAndHasX` types (available for locks 1-9):
 
 ```typescript
-import type { LocksAtMostAndHas3, LocksAtMostAndHas6 } from './src/core';
+import type { LocksAtMostAndHas3, LocksAtMostAndHas6 } from '@markdrei/ironguard-typescript-locks';
 
 // Requires LOCK_3, flexible about locks 1-2
 async function processData(
@@ -211,12 +228,12 @@ async function newWay(
 }
 ```
 
-### 6. Ensuring Specific Locks Are Held (HasLockXContext)
+### 7. Ensuring Specific Locks Are Held (HasLockXContext)
 
 When you need to **check** that a specific lock is held but **NOT acquire new locks**, use `HasLockXContext` types. These are available for all lock levels 1-15:
 
 ```typescript
-import type { HasLock3Context, HasLock11Context, IronLocks } from './src/core';
+import type { HasLock3Context, HasLock11Context, IronLocks } from '@markdrei/ironguard-typescript-locks';
 
 // This function requires LOCK_3 to be held by the caller
 // ⚠️ Cannot acquire new locks - generic type prevents it
@@ -262,7 +279,7 @@ processData(ctx13); // ✅ Also works - LOCK_3 is held (along with LOCK_1)
 
 **Key limitation**: The generic type parameter `<THeld extends IronLocks>` prevents acquiring new locks. If you need to acquire locks, use `LocksAtMostAndHasX` instead (available for locks 1-9).eter `<THeld extends IronLocks>` prevents acquiring new locks. If you need to acquire locks, use `LocksAtMostAndHasX` instead (available for locks 1-9).
 
-### 7. Complete Example Flow
+### 8. Complete Example Flow
 
 Combining all patterns from MarksExample.ts:
 
@@ -366,6 +383,19 @@ const ctx = await createLockContext()
   .then(c => c.acquireRead(LOCK_5));
 ```
 
+## Waiting Safely
+
+You can bound lock waits with `timeoutMs` or cancel them with `AbortSignal`:
+
+```typescript
+const controller = new AbortController();
+
+await createLockContext().acquireWrite(LOCK_3, {
+  timeoutMs: 500,
+  signal: controller.signal
+});
+```
+
 ## Flexible Lock Types
 
 ### LocksAtMost Types (1-9)
@@ -375,7 +405,7 @@ Pre-defined types for accepting multiple lock states:
 ```typescript
 import type { 
   LocksAtMost1, LocksAtMost2, LocksAtMost3, // ... up to LocksAtMost9
-} from './src/core';
+} from '@markdrei/ironguard-typescript-locks';
 
 // Accepts: [], [1], [2], [3], [1,2], [1,3], [2,3], [1,2,3]
 function plugin(ctx: LockContext<LocksAtMost3>): void {
@@ -398,7 +428,7 @@ import type {
   NullableLocksAtMost11,
   NullableLocksAtMost12,
   // ... up to NullableLocksAtMost15
-} from './src/core';
+} from '@markdrei/ironguard-typescript-locks';
 
 async function handler<THeld extends IronLocks>(
   ctx: NullableLocksAtMost10<THeld>
@@ -475,8 +505,9 @@ await Promise.all([thread1(), thread2()]);
 
 ```bash
 npm run examples                # All features demo
-npm run test                    # Runtime tests (155 tests)
-npm run test:compile            # Compile-time validation (85 tests)
+npm run examples:workflow       # Realistic workflow coordination demo
+npm run test                    # Runtime tests (151 tests)
+npm run test:compile            # Compile-time validation (83 tests)
 ```
 
 ## Next Steps

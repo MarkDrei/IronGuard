@@ -272,6 +272,56 @@ describe('Runtime Mutual Exclusion', () => {
     });
   });
 
+  describe('Waiting Controls', () => {
+    test('should time out waiting writers', async () => {
+      const ctx = await createLockContext().acquireWrite(LOCK_5);
+
+      try {
+        await assert.rejects(
+          createLockContext().acquireWrite(LOCK_5, { timeoutMs: 25 }),
+          /Timed out waiting for write lock 5/
+        );
+      } finally {
+        ctx.dispose();
+      }
+    });
+
+    test('should abort waiting readers', async () => {
+      const ctx = await createLockContext().acquireWrite(LOCK_6);
+      const controller = new AbortController();
+
+      const pendingReader = createLockContext().acquireRead(LOCK_6, {
+        signal: controller.signal
+      });
+
+      setTimeout(() => controller.abort(), 15);
+
+      try {
+        await assert.rejects(pendingReader, /Lock acquisition aborted for lock 6/);
+      } finally {
+        ctx.dispose();
+      }
+    });
+
+    test('should allow a new waiter after a timeout or abort', async () => {
+      const ctx = await createLockContext().acquireWrite(LOCK_7);
+      const controller = new AbortController();
+
+      const timedOutWriter = createLockContext().acquireWrite(LOCK_7, { timeoutMs: 15 });
+      const abortedWriter = createLockContext().acquireWrite(LOCK_7, { signal: controller.signal });
+
+      setTimeout(() => controller.abort(), 10);
+
+      await assert.rejects(timedOutWriter, /Timed out waiting for write lock 7/);
+      await assert.rejects(abortedWriter, /Lock acquisition aborted for lock 7/);
+
+      setTimeout(() => ctx.dispose(), 20);
+
+      const recovered = await createLockContext().acquireWrite(LOCK_7, { timeoutMs: 100 });
+      recovered.dispose();
+    });
+  });
+
   describe('Concurrent Access Patterns', () => {
     test('should handle high concurrency on single lock', async () => {
       const concurrencyLevel = 10;

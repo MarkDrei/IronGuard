@@ -9,7 +9,8 @@ export {
   LockContext,
   IronGuardManager,
   type LockLevel,
-  type LockMode
+  type LockMode,
+  type LockAcquisitionOptions
 } from './core/ironGuardSystem';
 
 // All lock constants

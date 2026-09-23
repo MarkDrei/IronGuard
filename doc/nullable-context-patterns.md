@@ -34,7 +34,7 @@ type NullableLocksAtMost10<THeld extends readonly LockLevel[]> =
 ### Basic Usage
 
 ```typescript
-import { createLockContext, LOCK_8, LOCK_12, type NullableLocksAtMost10, type LockLevel } from './src/core';
+import { createLockContext, LOCK_8, LOCK_12, type NullableLocksAtMost10, type LockLevel } from '@markdrei/ironguard-typescript-locks';
 
 function processWithMaxLock10<THeld extends readonly LockLevel[]>(
   ctx: NullableLocksAtMost10<THeld>
@@ -123,10 +123,10 @@ All 15 lock levels are supported:
 ### Basic Usage
 
 ```typescript
-import { createLockContext, LOCK_1, LOCK_3, LOCK_5, type HasLock3Context, type LockLevel } from './src/core';
+import { createLockContext, LOCK_1, LOCK_3, LOCK_5, type HasLock3Context, type LockLevel } from '@markdrei/ironguard-typescript-locks';
 
 function processWithLock3<THeld extends readonly LockLevel[]>(
-  ctx: HasLock3Context<THeld> extends string ? never : HasLock3Context<THeld>
+  ctx: HasLock3Context<THeld>
 ): void {
   // TypeScript guarantees LOCK_3 is present
   console.log(`Processing with guaranteed LOCK_3: [${ctx.getHeldLocks()}]`);
@@ -152,11 +152,11 @@ const ctx1 = await createLockContext().acquireWrite(LOCK_1);
 
 1. **Resource-Specific Operations**: Ensure specific lock for resource access
    ```typescript
-   import type { HasLock3Context, HasLock5Context, HasLock8Context } from './src/core';
+   import type { HasLock3Context, HasLock5Context, HasLock8Context } from '@markdrei/ironguard-typescript-locks';
    
    // Database operations require LOCK_3
    function databaseQuery<THeld extends readonly LockLevel[]>(
-     ctx: HasLock3Context<THeld> extends string ? never : HasLock3Context<THeld>,
+     ctx: HasLock3Context<THeld>,
      query: string
    ): void {
      // Guaranteed to have LOCK_3 (database lock)
@@ -165,7 +165,7 @@ const ctx1 = await createLockContext().acquireWrite(LOCK_1);
    
    // File operations require LOCK_5
    function fileOperation<THeld extends readonly LockLevel[]>(
-     ctx: HasLock5Context<THeld> extends string ? never : HasLock5Context<THeld>,
+     ctx: HasLock5Context<THeld>,
      filename: string
    ): void {
      // Guaranteed to have LOCK_5 (file lock)
@@ -174,7 +174,7 @@ const ctx1 = await createLockContext().acquireWrite(LOCK_1);
    
    // Network operations require LOCK_8
    function networkRequest<THeld extends readonly LockLevel[]>(
-     ctx: HasLock8Context<THeld> extends string ? never : HasLock8Context<THeld>,
+     ctx: HasLock8Context<THeld>,
      endpoint: string
    ): void {
      // Guaranteed to have LOCK_8 (network lock)
@@ -184,11 +184,11 @@ const ctx1 = await createLockContext().acquireWrite(LOCK_1);
 
 2. **Privilege-Based Operations**: Different locks for different privilege levels
    ```typescript
-   import type { HasLock10Context, HasLock15Context } from './src/core';
+   import type { HasLock10Context, HasLock15Context } from '@markdrei/ironguard-typescript-locks';
    
    // Audit operations require LOCK_10
    function auditLog<THeld extends readonly LockLevel[]>(
-     ctx: HasLock10Context<THeld> extends string ? never : HasLock10Context<THeld>,
+     ctx: HasLock10Context<THeld>,
      message: string
    ): void {
      // Audit logging with LOCK_10
@@ -197,7 +197,7 @@ const ctx1 = await createLockContext().acquireWrite(LOCK_1);
    
    // Admin operations require LOCK_15
    function adminOperation<THeld extends readonly LockLevel[]>(
-     ctx: HasLock15Context<THeld> extends string ? never : HasLock15Context<THeld>,
+     ctx: HasLock15Context<THeld>,
      operation: string
    ): void {
      // Highest privilege operations
@@ -208,7 +208,7 @@ const ctx1 = await createLockContext().acquireWrite(LOCK_1);
 3. **Function Composition**: Chain operations with specific lock requirements
    ```typescript
    async function complexWorkflow<THeld extends readonly LockLevel[]>(
-     baseCtx: HasLock3Context<THeld> extends string ? never : HasLock3Context<THeld>
+     baseCtx: HasLock3Context<THeld>
    ): Promise<void> {
      // Start with LOCK_3
      databaseQuery(baseCtx, 'SELECT * FROM users');
@@ -262,7 +262,7 @@ function processB<THeld extends readonly LockLevel[]>(
 ```typescript
 // ValidLockXContext: Can acquire OR already has
 function processC<THeld extends readonly LockLevel[]>(
-  ctx: ValidLock3Context<THeld> extends string ? never : ValidLock3Context<THeld>
+  ctx: ValidLock3Context<THeld>
 ): void {
   // Accepts: empty, [1], [2], [3], etc.
   // Can potentially acquire LOCK_3
@@ -270,7 +270,7 @@ function processC<THeld extends readonly LockLevel[]>(
 
 // HasLockXContext: Must already have the lock
 function processD<THeld extends readonly LockLevel[]>(
-  ctx: HasLock3Context<THeld> extends string ? never : HasLock3Context<THeld>
+  ctx: HasLock3Context<THeld>
 ): void {
   // Accepts only contexts with LOCK_3: [3], [1,3], [3,5], etc.
 }
@@ -286,7 +286,7 @@ function processD<THeld extends readonly LockLevel[]>(
 ```typescript
 // ✅ Good: Use HasLockX for guaranteed lock presence
 function databaseOp<T extends readonly LockLevel[]>(
-  ctx: HasLock3Context<T> extends string ? never : HasLock3Context<T>
+  ctx: HasLock3Context<T>
 ) {
   // No need to check - LOCK_3 is guaranteed
 }
@@ -409,18 +409,18 @@ const RESOURCE_LOCKS = {
 } as const;
 
 // Type-safe resource operations
-import type { HasLock3Context, HasLock5Context, HasLock8Context } from './src/core';
+import type { HasLock3Context, HasLock5Context, HasLock8Context } from '@markdrei/ironguard-typescript-locks';
 
 function accessDatabase<T extends readonly LockLevel[]>(
-  ctx: HasLock3Context<T> extends string ? never : HasLock3Context<T>
+  ctx: HasLock3Context<T>
 ) { /* ... */ }
 
 function accessFiles<T extends readonly LockLevel[]>(
-  ctx: HasLock5Context<T> extends string ? never : HasLock5Context<T>
+  ctx: HasLock5Context<T>
 ) { /* ... */ }
 
 function accessNetwork<T extends readonly LockLevel[]>(
-  ctx: HasLock8Context<T> extends string ? never : HasLock8Context<T>
+  ctx: HasLock8Context<T>
 ) { /* ... */ }
 ```
 

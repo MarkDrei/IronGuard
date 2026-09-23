@@ -54,11 +54,29 @@ const LOCK_15 = 15 as const;
 // Read/Write lock mode type
 type LockMode = 'read' | 'write';
 
+type LockAcquisitionOptions = {
+  timeoutMs?: number;
+  signal?: AbortSignal;
+};
+
+type QueueWaiter = {
+  resolve: () => void;
+  reject: (error: Error) => void;
+  cleanup?: () => void;
+};
+
+type LineageState = {
+  heldLocks: readonly LockLevel[];
+  lockModes: Map<LockLevel, LockMode>;
+  closed: boolean;
+};
+
 // Global lock state type for debug information
 type GlobalLockState = {
   readers: Map<LockLevel, number>;
   writers: Set<LockLevel>;
   pendingWriters: Map<LockLevel, number>;
+  pendingReaders: Map<LockLevel, number>;
   readerStacks?: Map<LockLevel, string[]>;
   writerStacks?: Map<LockLevel, string>;
 };
@@ -69,8 +87,8 @@ class IronGuardManager {
   private static instance: IronGuardManager;
   private readerCounts = new Map<LockLevel, number>();
   private activeWriters = new Set<LockLevel>();
-  private pendingWriters = new Map<LockLevel, Array<() => void>>();
-  private pendingReaders = new Map<LockLevel, Array<() => void>>();
+  private pendingWriters = new Map<LockLevel, QueueWaiter[]>();
+  private pendingReaders = new Map<LockLevel, QueueWaiter[]>();
   private debugMode = false;
   private readerStacks = new Map<LockLevel, string[]>();
   private writerStacks = new Map<LockLevel, string>();
@@ -96,10 +114,10 @@ class IronGuardManager {
   }
 
   // Acquire a read lock - allows concurrent readers unless writer is waiting/active
-  async acquireReadLock(lock: LockLevel): Promise<void> {
+  async acquireReadLock(lock: LockLevel, options?: LockAcquisitionOptions): Promise<void> {
     // If writer active or pending, wait in reader queue
     while (this.activeWriters.has(lock) || this.hasPendingWriters(lock)) {
-      await this.waitInReaderQueue(lock);
+      await this.waitInReaderQueue(lock, options);
     }
 
     // Grant read lock
@@ -119,14 +137,14 @@ class IronGuardManager {
   }
 
   // Acquire a write lock - waits for all readers and other writers, has preference
-  async acquireWriteLock(lock: LockLevel): Promise<void> {
+  async acquireWriteLock(lock: LockLevel, options?: LockAcquisitionOptions): Promise<void> {
     // Add to pending writers queue (establishes writer preference)
     this.addToPendingWriter(lock);
 
     try {
       // Wait for all readers and other writers to finish
       while (this.hasActiveReaders(lock) || this.activeWriters.has(lock)) {
-        await this.waitInWriterQueue(lock);
+        await this.waitInWriterQueue(lock, options);
       }
 
       // Grant write lock
@@ -220,32 +238,17 @@ class IronGuardManager {
     // Remove current writer from pending queue
     const queue = this.pendingWriters.get(lock);
     if (queue && queue.length > 0) {
-      queue.shift();
+      const waiter = queue.shift();
+      waiter?.cleanup?.();
     }
   }
 
-  private async waitInReaderQueue(lock: LockLevel): Promise<void> {
-    return new Promise<void>((resolve) => {
-      if (!this.pendingReaders.has(lock)) {
-        this.pendingReaders.set(lock, []);
-      }
-      const queue = this.pendingReaders.get(lock);
-      if (queue) {
-        queue.push(resolve);
-      }
-    });
+  private async waitInReaderQueue(lock: LockLevel, options?: LockAcquisitionOptions): Promise<void> {
+    return this.waitInQueue(this.pendingReaders, lock, options, `Timed out waiting for read lock ${lock}`);
   }
 
-  private async waitInWriterQueue(lock: LockLevel): Promise<void> {
-    return new Promise<void>((resolve) => {
-      if (!this.pendingWriters.has(lock)) {
-        this.pendingWriters.set(lock, []);
-      }
-      const queue = this.pendingWriters.get(lock);
-      if (queue) {
-        queue.push(resolve);
-      }
-    });
+  private async waitInWriterQueue(lock: LockLevel, options?: LockAcquisitionOptions): Promise<void> {
+    return this.waitInQueue(this.pendingWriters, lock, options, `Timed out waiting for write lock ${lock}`);
   }
 
   private notifyWaitingWriters(lock: LockLevel): void {
@@ -253,7 +256,7 @@ class IronGuardManager {
     if (writerQueue && writerQueue.length > 0) {
       const nextWriter = writerQueue[0]; // Don't shift yet - will be removed in removeFromPendingWriters
       if (nextWriter) {
-        nextWriter();
+        nextWriter.resolve();
       }
     }
   }
@@ -263,8 +266,77 @@ class IronGuardManager {
     if (readerQueue && readerQueue.length > 0) {
       // Wake up all waiting readers
       const readers = readerQueue.splice(0);
-      readers.forEach(resolve => resolve());
+      readers.forEach(waiter => {
+        waiter.cleanup?.();
+        waiter.resolve();
+      });
     }
+  }
+
+  private waitInQueue(
+    queues: Map<LockLevel, QueueWaiter[]>,
+    lock: LockLevel,
+    options: LockAcquisitionOptions | undefined,
+    timeoutMessage: string
+  ): Promise<void> {
+    if (options?.signal?.aborted) {
+      return Promise.reject(new Error(`Lock acquisition aborted for lock ${lock}`));
+    }
+
+    return new Promise<void>((resolve, reject) => {
+      if (!queues.has(lock)) {
+        queues.set(lock, []);
+      }
+
+      const queue = queues.get(lock)!;
+      const waiter: QueueWaiter = {
+        resolve: () => {
+          waiter.cleanup?.();
+          resolve();
+        },
+        reject: (error) => {
+          waiter.cleanup?.();
+          reject(error);
+        }
+      };
+
+      let timeoutId: NodeJS.Timeout | undefined;
+      let abortListener: (() => void) | undefined;
+
+      waiter.cleanup = () => {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = undefined;
+        }
+        if (abortListener && options?.signal) {
+          options.signal.removeEventListener('abort', abortListener);
+          abortListener = undefined;
+        }
+      };
+
+      if (typeof options?.timeoutMs === 'number') {
+        timeoutId = setTimeout(() => {
+          const index = queue.indexOf(waiter);
+          if (index >= 0) {
+            queue.splice(index, 1);
+          }
+          waiter.reject(new Error(timeoutMessage));
+        }, options.timeoutMs);
+      }
+
+      if (options?.signal) {
+        abortListener = () => {
+          const index = queue.indexOf(waiter);
+          if (index >= 0) {
+            queue.splice(index, 1);
+          }
+          waiter.reject(new Error(`Lock acquisition aborted for lock ${lock}`));
+        };
+        options.signal.addEventListener('abort', abortListener, { once: true });
+      }
+
+      queue.push(waiter);
+    });
   }
 
   // Debug method to check current lock state
@@ -276,10 +348,18 @@ class IronGuardManager {
       }
     }
 
+    const pendingReaderCounts = new Map<LockLevel, number>();
+    for (const [lock, queue] of this.pendingReaders) {
+      if (queue.length > 0) {
+        pendingReaderCounts.set(lock, queue.length);
+      }
+    }
+
     const result: GlobalLockState = {
       readers: new Map(this.readerCounts),
       writers: new Set(this.activeWriters),
-      pendingWriters: pendingWriterCounts
+      pendingWriters: pendingWriterCounts,
+      pendingReaders: pendingReaderCounts
     };
 
     if (this.debugMode) {
@@ -359,12 +439,69 @@ class LockContext<THeldLocks extends readonly LockLevel[] = readonly []> {
   private heldLocks: THeldLocks;
   private lockModes = new Map<LockLevel, LockMode>();
   private manager = IronGuardManager.getInstance();
+  private lineage: LineageState;
 
-  constructor(heldLocks: THeldLocks, lockModes?: Map<LockLevel, LockMode>) {
+  constructor(heldLocks: THeldLocks, lockModes?: Map<LockLevel, LockMode>, lineage?: LineageState) {
     this.heldLocks = heldLocks;
     if (lockModes) {
       this.lockModes = new Map(lockModes);
     }
+    this.lineage = lineage ?? {
+      heldLocks,
+      lockModes: new Map(this.lockModes),
+      closed: false
+    };
+  }
+
+  private isCurrentSnapshot(): boolean {
+    if (this.lineage.closed) {
+      return false;
+    }
+
+    if (this.lineage.heldLocks.length !== this.heldLocks.length) {
+      return false;
+    }
+
+    for (let index = 0; index < this.heldLocks.length; index += 1) {
+      const heldLock = this.heldLocks[index];
+      const lineageLock = this.lineage.heldLocks[index];
+      if (heldLock !== lineageLock) {
+        return false;
+      }
+
+      if (this.lockModes.get(heldLock) !== this.lineage.lockModes.get(lineageLock)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  private hasRuntimeBackingLocks(): boolean {
+    return this.heldLocks.every((lock) => {
+      const mode = this.lockModes.get(lock);
+      return mode !== undefined && this.manager.isLockHeld(lock, mode);
+    });
+  }
+
+  private assertContextUsable(action: string): void {
+    if (this.lineage.closed) {
+      throw new Error(`Cannot ${action}: context has already been disposed`);
+    }
+
+    if (!this.isCurrentSnapshot()) {
+      throw new Error(`Cannot ${action}: context is stale because lock state changed in a derived context`);
+    }
+
+    if (!this.hasRuntimeBackingLocks()) {
+      throw new Error(`Cannot ${action}: one or more locks are no longer held at runtime`);
+    }
+  }
+
+  private syncLineage(heldLocks: readonly LockLevel[], lockModes: Map<LockLevel, LockMode>, closed = false): void {
+    this.lineage.heldLocks = heldLocks;
+    this.lineage.lockModes = new Map(lockModes);
+    this.lineage.closed = closed;
   }
 
   /**
@@ -389,16 +526,21 @@ class LockContext<THeldLocks extends readonly LockLevel[] = readonly []> {
    * ```
    */
   async acquireRead<TLock extends LockLevel>(
-    lock: CanAcquireInternal<THeldLocks, TLock> extends true ? TLock : never
+    lock: CanAcquireInternal<THeldLocks, TLock> extends true ? TLock : never,
+    options?: LockAcquisitionOptions
   ): Promise<LockContext<readonly [...THeldLocks, TLock]>> {
+    this.assertContextUsable(`acquire read lock ${lock}`);
 
     // Runtime read lock acquisition
-    await this.manager.acquireReadLock(lock);
+    await this.manager.acquireReadLock(lock, options);
 
     const newLockModes = new Map(this.lockModes);
     newLockModes.set(lock, 'read');
 
-    return new LockContext([...this.heldLocks, lock] as const, newLockModes);
+    const newHeldLocks = [...this.heldLocks, lock] as const;
+    this.syncLineage(newHeldLocks, newLockModes);
+
+    return new LockContext(newHeldLocks, newLockModes, this.lineage);
   }
 
   /**
@@ -424,16 +566,21 @@ class LockContext<THeldLocks extends readonly LockLevel[] = readonly []> {
    * ```
    */
   async acquireWrite<TLock extends LockLevel>(
-    lock: CanAcquireInternal<THeldLocks, TLock> extends true ? TLock : never
+    lock: CanAcquireInternal<THeldLocks, TLock> extends true ? TLock : never,
+    options?: LockAcquisitionOptions
   ): Promise<LockContext<readonly [...THeldLocks, TLock]>> {
+    this.assertContextUsable(`acquire write lock ${lock}`);
 
     // Runtime write lock acquisition
-    await this.manager.acquireWriteLock(lock);
+    await this.manager.acquireWriteLock(lock, options);
 
     const newLockModes = new Map(this.lockModes);
     newLockModes.set(lock, 'write');
 
-    return new LockContext([...this.heldLocks, lock] as const, newLockModes);
+    const newHeldLocks = [...this.heldLocks, lock] as const;
+    this.syncLineage(newHeldLocks, newLockModes);
+
+    return new LockContext(newHeldLocks, newLockModes, this.lineage);
   }
 
   /**
@@ -461,6 +608,7 @@ class LockContext<THeldLocks extends readonly LockLevel[] = readonly []> {
     lock: Contains<THeldLocks, TLock> extends true ? TLock : never,
     operation: () => void
   ): void {
+    this.assertContextUsable(`use lock ${lock}`);
     const mode = this.lockModes.get(lock);
     if (!mode) {
       throw new Error(`Cannot use lock ${lock}: not tracked by this context`);
@@ -504,11 +652,13 @@ class LockContext<THeldLocks extends readonly LockLevel[] = readonly []> {
   >(
     lock: CanAcquireInternal<THeldLocks, TLock> extends true ? TLock : never,
     operation: (ctx: LockContext<readonly [...THeldLocks, TLock]>) => Promise<TResult> | TResult,
-    mode: LockMode = 'write'
+    mode: LockMode = 'write',
+    options?: LockAcquisitionOptions
   ): Promise<TResult> {
+    this.assertContextUsable(`temporarily acquire lock ${lock}`);
     const ctxWithLock = mode === 'read'
-      ? await this.acquireRead(lock)
-      : await this.acquireWrite(lock);
+      ? await this.acquireRead(lock, options)
+      : await this.acquireWrite(lock, options);
 
     try {
       return await operation(ctxWithLock);
@@ -551,6 +701,7 @@ class LockContext<THeldLocks extends readonly LockLevel[] = readonly []> {
   releaseLock<TLock extends LockLevel>(
     lock: Contains<THeldLocks, TLock> extends true ? TLock : never
   ): LockContext<RemoveElement<THeldLocks, TLock>> {
+    this.assertContextUsable(`release lock ${lock}`);
 
     // Find the lock
     if (!this.heldLocks.includes(lock)) {
@@ -575,7 +726,13 @@ class LockContext<THeldLocks extends readonly LockLevel[] = readonly []> {
       }
     }
 
-    return new LockContext(newLocks as unknown as RemoveElement<THeldLocks, TLock>, newLockModes);
+    this.syncLineage(newLocks, newLockModes);
+
+    return new LockContext(
+      newLocks as unknown as RemoveElement<THeldLocks, TLock>,
+      newLockModes,
+      this.lineage
+    );
   }
 
   /**
@@ -603,6 +760,7 @@ class LockContext<THeldLocks extends readonly LockLevel[] = readonly []> {
   hasLock<TLock extends LockLevel>(
     lock: TLock
   ): Contains<THeldLocks, TLock> {
+    this.assertContextUsable(`check lock ${lock}`);
     return this.heldLocks.includes(lock) as Contains<THeldLocks, TLock>;
   }
 
@@ -624,6 +782,7 @@ class LockContext<THeldLocks extends readonly LockLevel[] = readonly []> {
    * ```
    */
   getHeldLocks(): THeldLocks {
+    this.assertContextUsable('inspect held locks');
     return this.heldLocks;
   }
 
@@ -646,6 +805,7 @@ class LockContext<THeldLocks extends readonly LockLevel[] = readonly []> {
    * ```
    */
   getMaxHeldLock(): number {
+    this.assertContextUsable('inspect maximum held lock');
     return this.heldLocks.length > 0 ? Math.max(...this.heldLocks) : 0;
   }
 
@@ -679,6 +839,14 @@ class LockContext<THeldLocks extends readonly LockLevel[] = readonly []> {
    * ```
    */
   dispose(): void {
+    if (this.lineage.closed) {
+      return;
+    }
+
+    if (!this.isCurrentSnapshot()) {
+      throw new Error('Cannot dispose: context is stale because lock state changed in a derived context');
+    }
+
     for (const lock of this.heldLocks) {
       const mode = this.lockModes.get(lock);
       if (mode === 'read') {
@@ -687,6 +855,8 @@ class LockContext<THeldLocks extends readonly LockLevel[] = readonly []> {
         this.manager.releaseWriteLock(lock);
       }
     }
+
+    this.syncLineage([] as const, new Map<LockLevel, LockMode>(), true);
   }
 
   /**
@@ -708,6 +878,7 @@ class LockContext<THeldLocks extends readonly LockLevel[] = readonly []> {
   getLockMode<TLock extends LockLevel>(
     lock: Contains<THeldLocks, TLock> extends true ? TLock : never
   ): LockMode | undefined {
+    this.assertContextUsable(`inspect mode for lock ${lock}`);
     return this.lockModes.get(lock);
   }
 
@@ -731,6 +902,7 @@ class LockContext<THeldLocks extends readonly LockLevel[] = readonly []> {
    * ```
    */
   toString(): string {
+    this.assertContextUsable('inspect context state');
     const globalState = this.manager.getGlobalLocks();
     const readerSummary = Array.from(globalState.readers.entries())
       .map(([lock, count]) => `${lock}R:${count}`)
@@ -796,6 +968,7 @@ export {
 export type {
   LockLevel,
   LockMode,
+  LockAcquisitionOptions,
   Contains,
   RemoveElement
 };

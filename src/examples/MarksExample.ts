@@ -69,7 +69,7 @@ async function validPath(): Promise<void> {
             
             console.log(`Step 1b >>> current locks: [${ctx_1_3.getHeldLocks()}]`);
             await middleProcessor(ctx_1_3);
-            console.log(`Step 1b <<< current locks: [${ctx_1.getHeldLocks()}]`);
+            console.log(`Step 1b <<< current locks: [${ctx_1_3.getHeldLocks()}]`);
         } finally {
            ctx_1_3.releaseLock(LOCK_3);
         }
@@ -205,5 +205,4 @@ async function hasLock6Example(context: LockContext<LocksAtMostAndHas6>) : Promi
     // context.acquireRead(LOCK_6);
 
 }
-
 

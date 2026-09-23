@@ -19,7 +19,7 @@
     "examples": "npm run build && node dist/examples/index.js",
     "examples:violations": "npm run build && node dist/examples/compileTimeViolations.js",
     "examples:mutex": "npm run build && node dist/examples/mutualExclusionDemo.js",
-    "examples:rollback": "npm run build && node dist/examples/rollbackDemo.js",
+    "examples:workflow": "npm run build && node dist/examples/workflowCoordinationDemo.js",
     "examples:combinations": "npm run build && node dist/examples/featureCombinationsDemo.js",
     "examples:readwrite": "npm run build && node dist/examples/readWriteExamples.js",
     "examples:context": "npm run build && node dist/examples/contextTransferDemo.js",

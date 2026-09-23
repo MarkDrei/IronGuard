@@ -33,12 +33,13 @@ import { runHasLockContextDemo } from './hasLockContextDemo';
 import { runMarksExample } from './MarksExample';
 import { runUseLockRuntimeDemo } from './useLockRuntimeDemo';
 import { demonstrateDebugInfo } from './debug-demo';
+import { runWorkflowCoordinationDemo } from './workflowCoordinationDemo';
 
 async function main(): Promise<void> {
 
   console.log('=== IronGuard System Examples ===');
-  console.log('This system demonstrates compile-time lock ordering validation');
-  console.log('with unbreakable protection and flexible acquisition patterns.\n');
+  console.log('This library demonstrates async resource coordination with compile-time');
+  console.log('lock ordering validation and runtime mutual exclusion.\n');
   
   // Lock skipping demo
   await demonstrateLockSkipping();
@@ -72,6 +73,9 @@ async function main(): Promise<void> {
 
   // Debug mode and stack trace capture demo
   await demonstrateDebugInfo();
+
+  // Realistic async workflow coordination demo
+  await runWorkflowCoordinationDemo();
   
   console.log('\n=== Key Benefits ===');
   console.log('✓ Runtime mutual exclusion (real thread safety)');
