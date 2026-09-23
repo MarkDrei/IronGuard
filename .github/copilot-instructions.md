@@ -1,59 +1,81 @@
-# IronGuard - TypeScript Lock Order System
+# IronGuard - Repository Guidance for GitHub Copilot
 
-This is a TypeScript project that implements compile-time lock order violation detection with runtime mutual exclusion.
+This repository contains a focused TypeScript library for **async resource coordination with enforced lock hierarchy**.
 
-## Project Context
+## What the project does
 
-- **Purpose**: Prevent deadlocks through compile-time validation and race conditions through runtime mutual exclusion
-- **Core Technology**: Advanced TypeScript type system with conditional types, template literals, and recursive types
-- **Runtime**: Async/await with singleton lock manager for true mutual exclusion
+- Prevents deadlocks by enforcing lock acquisition order at compile time
+- Reduces race conditions with runtime mutual exclusion
+- Supports read/write locks, context transfer, and higher-order helper patterns
+- Targets codebases with a **small, stable hierarchy of shared resources**
 
-## Key Concepts
+## Core implementation files
 
-- **Lock Levels**: 1-5 representing increasing privilege levels
-- **Lock Ordering**: Must acquire locks in ascending order (can skip levels)
-- **Type Safety**: Functions can declare lock requirements validated at compile-time
-- **Flexible Patterns**: Support for lock skipping and conditional acquisition
+- `src/core/ironGuardSystem.ts` - runtime lock manager, `LockContext`, acquire/release/dispose behavior
+- `src/core/ironGuardTypes.ts` - advanced type utilities like `LocksAtMost*`, `HasLock*Context`, `LocksAtMostAndHas*`
+- `src/examples/` - usage demonstrations, including realistic workflow coordination
+- `tests/` - runtime and compile-time behavior coverage
+- `scripts/test-compile-time.js` - negative and positive compile-time validation harness
 
-## Code Architecture
+## Current runtime semantics that matter
 
-- `src/core/ironGuardSystem.ts` - Main async locking system with IronGuardManager singleton
-- `src/core/ironGuardTypes.ts` - Advanced TypeScript types for function constraints
-- `src/examples/` - Demonstrations of usage patterns
-- `tests/` - Custom test runner (Node v16 compatibility)
+- IronGuard supports **15 lock levels**: `LOCK_1` through `LOCK_15`
+- Locks must be acquired in **ascending order**, but levels may be skipped
+- `useLockWithAcquire()` is the preferred temporary-elevation API
+- `releaseLock()` releases a specific lock while keeping the rest of the lineage active
+- `dispose()` releases **all** locks in the current lineage snapshot
+- `LockContext` now enforces a **single active lineage snapshot at runtime**
+  - parent contexts become stale while a derived context is active
+  - stale contexts throw until the lineage returns to their exact held-lock snapshot
+- Lock acquisition accepts `timeoutMs` and `signal` (`AbortSignal`) options
 
-## Development Notes
+## Preferred implementation patterns
 
-- Uses advanced TypeScript features: conditional types, template literals, branded types
-- Runtime mutual exclusion prevents actual race conditions
-- All lock operations are async with proper resource disposal
-- Examples run sequentially to avoid deadlock demonstrations
+When generating or editing code that uses IronGuard:
 
-## Testing Guidelines
+1. Model the resource hierarchy first, then map it to lock levels
+2. Prefer `useLockWithAcquire()` over manual `acquire*()` + `dispose()` for temporary nested work
+3. Use `releaseLock()` when only one lock should be dropped
+4. Treat older contexts as invalid while a newer derived context is active
+5. Add `timeoutMs` or `AbortSignal` when waiting could block an external workflow
+6. Use the constraint types intentionally:
+   - `LocksAtMostX` for flexible inputs below a threshold
+   - `HasLockXContext` when a function must require a specific held lock
+   - `LocksAtMostAndHasX` when a function both requires a lock and may acquire higher ones
+7. Do not reintroduce examples that rely on the old `acquire()` API in new code
 
-### Runtime Tests (`tests/*.node.test.ts`)
-- Use Node.js test runner with `assert` for assertions
-- Include compile-time failure examples as commented code with `// ❌` markers
-- **Example Pattern**:
-  ```typescript
-  test('should prevent invalid operations via compile-time', async () => {
-    // ❌ Compile-time errors: These would fail TypeScript compilation
-    // const ctx = await createLockContext().acquire(LOCK_3);
-    // const invalid = await ctx.acquire(LOCK_1); // Lower level after higher
-    // const duplicate = await ctx.acquire(LOCK_3); // Duplicate acquisition
-    
-    // ✅ Valid operations for comparison
-    const validCtx = await createLockContext().acquire(LOCK_1);
-    const validNext = await validCtx.acquire(LOCK_3);
-    validNext.dispose();
-  });
-  ```
-- Structure: Single-line comments for easy uncomment testing
-- Categories: Lock ordering violations, duplicate acquisitions, invalid usage patterns
+## Validation workflow
 
-### Compile-Time Tests (`scripts/test-compile-time.js`)
-- Automated validation that invalid patterns are rejected by TypeScript
-- Add both invalid (should fail) and valid (should pass) test cases
-- Invalid tests verify TypeScript prevents incorrect usage
-- Valid tests ensure the test mechanism itself works correctly
-- Run with: `npm run test:compile`
+Always use the existing project commands:
+
+```bash
+npm install
+npm test
+npm run test:compile
+npm run lint
+npm run build
+```
+
+Notes:
+
+- `npm install` should be run before build/test/lint in fresh environments
+- Runtime tests use the Node.js test runner against `dist/tests/*.node.test.js`
+- Compile-time validation is a first-class part of the project, not optional documentation
+- Broken docs/examples are trust issues in this repository and should be fixed alongside code changes
+
+## Documentation priorities
+
+When updating docs or examples:
+
+- Position IronGuard as a **niche infrastructure library**, not a general concurrency toolkit
+- Emphasize backends, orchestration code, plugin boundaries, and fixed shared-resource hierarchies
+- Call out the stale-context runtime model where relevant
+- Prefer realistic async workflow examples over abstract feature demos
+
+## Custom skill
+
+If the task is about **using IronGuard correctly**, consult:
+
+- `.github/skills/ironguard-usage/SKILL.md`
+
+That skill contains the repository-preferred usage workflow, anti-patterns, and validation checklist.

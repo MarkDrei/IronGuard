@@ -49,6 +49,14 @@ async function example(): Promise<void> {
 }
 ```
 
+## Recommended Usage Rules
+
+- Prefer `useLockWithAcquire()` for temporary nested work
+- Use `releaseLock()` when dropping one lock and `dispose()` only when ending the whole lineage
+- Treat older contexts as stale while a newer derived context is active
+- Add `timeoutMs` or `AbortSignal` when a lock wait should be bounded
+- Use `LocksAtMost*`, `HasLock*Context`, and `LocksAtMostAndHas*` intentionally instead of overly broad context types
+
 ## Understanding Deadlocks
 
 Deadlocks occur when two or more operations wait for each other to release resources, creating a circular dependency that prevents any progress. This is one of the most challenging bugs in concurrent programming.
