@@ -310,10 +310,12 @@ describe('Runtime Mutual Exclusion', () => {
       const timedOutWriter = createLockContext().acquireWrite(LOCK_7, { timeoutMs: 15 });
       const abortedWriter = createLockContext().acquireWrite(LOCK_7, { signal: controller.signal });
 
+      const timedOutAssertion = assert.rejects(timedOutWriter, /Timed out waiting for write lock 7/);
+      const abortedAssertion = assert.rejects(abortedWriter, /Lock acquisition aborted for lock 7/);
+
       setTimeout(() => controller.abort(), 10);
 
-      await assert.rejects(timedOutWriter, /Timed out waiting for write lock 7/);
-      await assert.rejects(abortedWriter, /Lock acquisition aborted for lock 7/);
+      await Promise.all([timedOutAssertion, abortedAssertion]);
 
       setTimeout(() => ctx.dispose(), 20);
 

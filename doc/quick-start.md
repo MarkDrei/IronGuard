@@ -506,7 +506,7 @@ await Promise.all([thread1(), thread2()]);
 ```bash
 npm run examples                # All features demo
 npm run examples:workflow       # Realistic workflow coordination demo
-npm run test                    # Runtime tests (151 tests)
+npm run test                    # Runtime tests (155 tests)
 npm run test:compile            # Compile-time validation (83 tests)
 ```
 

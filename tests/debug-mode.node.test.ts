@@ -110,6 +110,7 @@ describe('Debug Mode Functionality', () => {
         assert(stacks.length === 1, 'Should have one reader stack');
 
         const stack = stacks[0];
+        assert(stack, 'Stack should not be undefined');
         assert(typeof stack === 'string', 'Stack should be a string');
         assert(stack.length > 0, 'Stack should not be empty');
 

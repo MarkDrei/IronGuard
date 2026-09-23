@@ -87,6 +87,7 @@ class IronGuardManager {
   private static instance: IronGuardManager;
   private readerCounts = new Map<LockLevel, number>();
   private activeWriters = new Set<LockLevel>();
+  private pendingWriterCounts = new Map<LockLevel, number>();
   private pendingWriters = new Map<LockLevel, QueueWaiter[]>();
   private pendingReaders = new Map<LockLevel, QueueWaiter[]>();
   private debugMode = false;
@@ -218,8 +219,7 @@ class IronGuardManager {
   }
 
   private hasPendingWriters(lock: LockLevel): boolean {
-    const queue = this.pendingWriters.get(lock);
-    return queue !== undefined && queue.length > 0;
+    return (this.pendingWriterCounts.get(lock) || 0) > 0;
   }
 
   private incrementReaderCount(lock: LockLevel): void {
@@ -228,18 +228,15 @@ class IronGuardManager {
   }
 
   private addToPendingWriter(lock: LockLevel): void {
-    // We'll add the actual resolver in waitInWriterQueue
-    if (!this.pendingWriters.has(lock)) {
-      this.pendingWriters.set(lock, []);
-    }
+    this.pendingWriterCounts.set(lock, (this.pendingWriterCounts.get(lock) || 0) + 1);
   }
 
   private removeFromPendingWriters(lock: LockLevel): void {
-    // Remove current writer from pending queue
-    const queue = this.pendingWriters.get(lock);
-    if (queue && queue.length > 0) {
-      const waiter = queue.shift();
-      waiter?.cleanup?.();
+    const remaining = (this.pendingWriterCounts.get(lock) || 0) - 1;
+    if (remaining <= 0) {
+      this.pendingWriterCounts.delete(lock);
+    } else {
+      this.pendingWriterCounts.set(lock, remaining);
     }
   }
 
@@ -254,7 +251,7 @@ class IronGuardManager {
   private notifyWaitingWriters(lock: LockLevel): void {
     const writerQueue = this.pendingWriters.get(lock);
     if (writerQueue && writerQueue.length > 0) {
-      const nextWriter = writerQueue[0]; // Don't shift yet - will be removed in removeFromPendingWriters
+      const nextWriter = writerQueue.shift();
       if (nextWriter) {
         nextWriter.resolve();
       }
@@ -288,7 +285,11 @@ class IronGuardManager {
         queues.set(lock, []);
       }
 
-      const queue = queues.get(lock)!;
+      const queue = queues.get(lock);
+      if (!queue) {
+        reject(new Error(`Internal queue error for lock ${lock}`));
+        return;
+      }
       const waiter: QueueWaiter = {
         resolve: () => {
           waiter.cleanup?.();
@@ -300,10 +301,10 @@ class IronGuardManager {
         }
       };
 
-      let timeoutId: NodeJS.Timeout | undefined;
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
       let abortListener: (() => void) | undefined;
 
-      waiter.cleanup = () => {
+      waiter.cleanup = (): void => {
         if (timeoutId) {
           clearTimeout(timeoutId);
           timeoutId = undefined;
@@ -325,7 +326,7 @@ class IronGuardManager {
       }
 
       if (options?.signal) {
-        abortListener = () => {
+        abortListener = (): void => {
           const index = queue.indexOf(waiter);
           if (index >= 0) {
             queue.splice(index, 1);
@@ -342,9 +343,9 @@ class IronGuardManager {
   // Debug method to check current lock state
   getGlobalLocks(): GlobalLockState {
     const pendingWriterCounts = new Map<LockLevel, number>();
-    for (const [lock, queue] of this.pendingWriters) {
-      if (queue.length > 0) {
-        pendingWriterCounts.set(lock, queue.length);
+    for (const [lock, count] of this.pendingWriterCounts) {
+      if (count > 0) {
+        pendingWriterCounts.set(lock, count);
       }
     }
 
@@ -465,6 +466,10 @@ class LockContext<THeldLocks extends readonly LockLevel[] = readonly []> {
     for (let index = 0; index < this.heldLocks.length; index += 1) {
       const heldLock = this.heldLocks[index];
       const lineageLock = this.lineage.heldLocks[index];
+      if (heldLock === undefined || lineageLock === undefined) {
+        return false;
+      }
+
       if (heldLock !== lineageLock) {
         return false;
       }

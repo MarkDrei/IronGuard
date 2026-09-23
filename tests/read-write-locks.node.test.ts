@@ -78,6 +78,7 @@ describe('Read/Write Lock System', () => {
       const writer1 = await writer1Promise;
       const acquireTime1 = Date.now();
       results.push({ context: 'writer1', timestamp: acquireTime1, mode: 'write' });
+      assert.strictEqual(writer1.getLockMode(LOCK_3), 'write');
 
       // Hold lock for 50ms
       setTimeout(() => {
@@ -88,12 +89,10 @@ describe('Read/Write Lock System', () => {
       const acquireTime2 = Date.now();
       results.push({ context: 'writer2', timestamp: acquireTime2, mode: 'write' });
 
-      writer2.dispose();
-
       // Verify mutual exclusion timing
       assert(results[1]!.timestamp > results[0]!.timestamp + 40, 'Second writer should wait for first');
-      assert.strictEqual(writer1.getLockMode(LOCK_3), 'write');
       assert.strictEqual(writer2.getLockMode(LOCK_3), 'write');
+      writer2.dispose();
     });
 
     test('should allow write locks in ascending order', async () => {

@@ -158,10 +158,11 @@ describe('LocksAtMost5 Usage Pattern', () => {
     assert.strictEqual(resultFull, 'full-access');
     
     // Partial context [4]
+    ctx5.releaseLock(LOCK_5);
     const resultPartial = await processWithFlexibleContext(ctx4);
     assert.strictEqual(resultPartial, 'partial');
     
-    ctx5.dispose();
+    ctx4.dispose();
   });
   
   test('should work with plugin hook pattern', async () => {

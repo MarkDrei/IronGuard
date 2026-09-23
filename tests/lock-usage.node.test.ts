@@ -305,7 +305,7 @@ describe('Compile-time Lock Usage Checks', () => {
       const ctx13 = await ctx1.acquireWrite(LOCK_3);
 
       assert.throws(() => ctx1.getHeldLocks(), /stale/);
-      assert.throws(() => ctx1.acquireWrite(LOCK_5), /stale/);
+      await assert.rejects(ctx1.acquireWrite(LOCK_5), /stale/);
 
       const restored = ctx13.releaseLock(LOCK_3);
       assert.deepStrictEqual(restored.getHeldLocks(), [1]);
